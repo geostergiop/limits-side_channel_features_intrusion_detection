@@ -60,55 +60,167 @@ malware dense than operational traffic.
 
 ## Current Audited Results
 
-The table below reports whole-session results from the expanded, memory-enabled
-GPT-5.4 runs and the corresponding full-fold Random Forest runs. Pooled F1 is
-computed from confusion counts combined across the five held-out captures.
+We report pooled malicious-class F1 by summing the confusion counts from all five
+held-out capture folds and then computing F1. This weights every evaluated sample
+equally and avoids treating five heterogeneous malware captures as if they were
+interchangeable repeated measurements. Fold-level results remain available in
+the published JSON summaries and should accompany any pooled value.
 
-| Evaluation | Detector / features | Accuracy | Precision | Recall | Pooled malicious F1 | Median fold F1 |
-|---|---|---:|---:|---:|---:|---:|
-| Balanced | GPT-5.4 / combined | 85.58% | 91.86% | 78.08% | 84.41% | 83.52% |
-| Balanced | RF / combined | 88.57% | 91.80% | 84.72% | 88.12% | 96.24% |
-| Deployment | GPT-5.4 / minimal | 90.36% | 89.51% | 91.16% | 90.33% | 90.97% |
-| Deployment | RF / minimal | 83.75% | 92.06% | 75.86% | 83.18% | 98.63% |
+### LLM Results
 
-These aggregates conceal material capture/family heterogeneity. The RF won four
-of five deployment family folds, while GPT-5.4 gained strongly on the held-out
-Website capture. The expanded deployment LLM run also produced a pooled test FPR
-of 10.41% even though thresholds targeted a 5% ceiling on validation data. This
-validation-to-test shift is a central deployment finding, not evidence that the
-constraint was enforced on test labels.
+Table 1 reports every configuration in the expanded, memory-enabled GPT-5.4
+session/window runs. Balanced cells contain 520 held-out decisions per variant
+(104 per fold, equally divided by class). Deployment cells contain 1,100 test
+decisions per variant (220 per fold, 49.36% malicious); their thresholds were
+selected using separate validation requests and were never tuned on these test
+labels.
 
-Local batch inference ranges from roughly 13,000 to 969,000 samples/s across
-recorded configurations. GPT-5.4 required about 1.72-1.86 seconds per API call in
-the expanded whole-session runs. These timings are not hardware-normalized, but
-the order-of-magnitude operational difference is unambiguous.
+| Evaluation | Context | Features | Test n | Accuracy | Precision | Recall | Pooled F1 | Mean s/query |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| Balanced | Whole session | Minimal | 520 | 70.00% | 87.14% | 46.92% | 61.00% | 1.909 |
+| Balanced | 5 s window | Minimal | 520 | 66.35% | 74.01% | 50.38% | 59.95% | 1.813 |
+| Balanced | Whole session | Mercury-style | 520 | 79.81% | 90.58% | 66.54% | 76.72% | 1.799 |
+| Balanced | 5 s window | Mercury-style | 520 | 65.38% | 67.54% | 59.23% | 63.11% | 1.875 |
+| Balanced | Whole session | Combined | 520 | 85.58% | 91.86% | 78.08% | **84.41%** | 1.850 |
+| Balanced | 5 s window | Combined | 520 | 71.35% | 72.47% | 68.85% | 70.61% | 1.823 |
+| Deployment | Whole session | Minimal | 1,100 | 90.36% | 89.51% | 91.16% | **90.33%** | 1.802 |
+| Deployment | 5 s window | Minimal | 1,100 | 79.55% | 84.27% | 72.01% | 77.66% | 1.742 |
+| Deployment | Whole session | Mercury-style | 1,100 | 76.27% | 95.48% | 54.51% | 69.40% | 1.717 |
+| Deployment | 5 s window | Mercury-style | 1,100 | 53.00% | 59.56% | 14.92% | 23.86% | 1.768 |
+| Deployment | Whole session | Combined | 1,100 | 79.27% | 96.19% | 60.41% | 74.21% | 1.768 |
+| Deployment | 5 s window | Combined | 1,100 | 52.18% | 55.15% | 16.76% | 25.71% | 1.722 |
 
-Claude Sonnet 4.6 is supported and was used in complementary packet-era
-experiments. However, the pre-replacement GitHub snapshot (`93208e275b62`)
-contains only
-`llm_results_openai_verbose.json`; it has no provider-specific Claude artifact.
-Its 5-, 10-, and 50-packet window scores therefore cannot be relabeled as Claude
-results in this release. Sonnet results should be cited only after exporting a
-provider-identified artifact from a reproducible run.
+Whole-session context is consistently preferable to the 5 s representation.
+The balanced combined-feature loss is 13.80 percentage points of F1; the
+deployment losses are 12.68 points for minimal, 45.54 points for Mercury-style,
+and 48.50 points for combined metadata. The deployment failure is primarily a
+recall collapse: Mercury-style and combined 5 s recall falls to 14.92% and
+16.76%, respectively. Moreover, the best whole-session deployment run has a
+10.41% pooled test FPR despite selecting thresholds under a 5% validation FPR
+constraint. The discrepancy demonstrates capture shift between validation and
+test; it does not imply that test labels influenced threshold selection.
 
-Important scope limits:
+The legacy Phase 4E archive used a different and weaker protocol: 200 balanced
+sessions were sampled without a capture-disjoint train/validation/test boundary,
+and each prompt received the first 5, 10, 20, or 50 packets. It is retained only
+as a historical sensitivity check.
 
-- The current capture-disjoint corpus has seven benign and five malicious
-  captures, with one malicious capture for each evaluated family.
-- Sessions and behavior windows require at least six packets so Hancitor remains
-  eligible.
-- Local models evaluate complete held-out folds; prompted LLM results use frozen,
-  family-aware budgeted subsets because API inference is costly.
-- The expanded published prompted runs are memory-enabled GPT-5.4 runs. Blind
-  prompting, Claude Sonnet 4.6, and a fine-tuning path exist in code, but no
-  completed Sonnet session or fine-tuned model artifact is claimed in the six
-  published summaries.
-- Local and LLM inputs share base metadata and split manifests, but their tabular
-  and textual representations are not byte-for-byte identical.
+| Legacy packet window | Accuracy | Precision | Recall | F1 | Prediction behavior |
+|---:|---:|---:|---:|---:|---|
+| 5 packets | 96.00% | 92.59% | 100.00% | 96.15% | 8 false positives |
+| 10 packets | 59.50% | 55.25% | 100.00% | 71.17% | 81 false positives |
+| 20 packets | 50.50% | 50.25% | 100.00% | 66.89% | 99 false positives |
+| 50 packets | 50.00% | 50.00% | 100.00% | 66.67% | all samples predicted malicious |
 
-See [`results/published/README.md`](results/published/README.md) and the six
-summary JSON files in `results/published/` for fold-level metrics, provenance,
-and source-artifact hashes.
+These legacy results do not establish that less context is harmful: the
+five-packet prompt was the best legacy setting, while longer prompts collapsed
+toward an all-malicious decision. They cannot be merged with the redesigned
+time-window results because the units, cohorts, provider metadata, and leakage
+controls differ. The recovered source is named
+`llm_results_openai_verbose.json` and contains no model field; it therefore
+cannot support a Claude Sonnet attribution. Claude Sonnet 4.6 remains executable
+through the current provider path, but no provider-identified Sonnet session
+artifact is claimed here.
+
+### Local ML and Ensembles
+
+The local suite evaluates complete held-out folds rather than budgeted subsets.
+Table 2 gives the best model/feature combination at each granularity; the three
+comparison figures below expose all five algorithms and all three feature sets,
+including non-winning cells.
+
+| Evaluation | Context | Best detector | Features | Accuracy | Precision | Recall | Pooled F1 |
+|---|---|---|---|---:|---:|---:|---:|
+| Balanced | Whole session | CART | Mercury-style | 89.56% | 93.34% | 85.19% | **89.08%** |
+| Balanced | 30 s window | KNN | Combined | 88.95% | 92.63% | 84.63% | 88.45% |
+| Balanced | 5 s window | KNN | Combined | 88.95% | 92.55% | 84.72% | 88.46% |
+| Balanced | 1 s window | CART | Mercury-style | 89.28% | 93.39% | 84.53% | 88.74% |
+| Balanced | Packet ablation | RF | Combined | 92.48% | 92.20% | 92.80% | **92.50%** |
+| Deployment | Whole session | RF | Minimal | 83.75% | 92.06% | 75.86% | 83.18% |
+| Deployment | 30 s window | RF | Minimal | 83.67% | 92.40% | 75.35% | 83.01% |
+| Deployment | 5 s window | RF | Minimal | 84.20% | 92.91% | 75.95% | 83.58% |
+| Deployment | 1 s window | CART | Combined | 85.30% | 92.08% | 79.04% | **85.06%** |
+| Deployment | Packet ablation | -- | -- | -- | -- | -- | Unsupported |
+
+Deployment packet ablation fails closed because fold 0 has only 60 malicious
+validation samples, below the configured minimum support of 100. Reporting no
+score is preferable to thresholding on an underpowered validation set. Across
+the supported session/window cells, RF, XGBoost, and LightGBM are nearly
+invariant to granularity: balanced F1 remains around 88% and deployment F1 around
+80-84%. This stability is not universal. Balanced KNN falls to 75.08% with
+minimal 5 s windows, while CART falls to approximately 76% for combined 30 s and
+1 s windows. Thus, the evidence supports robustness for the ensembles and most
+local configurations, not a blanket claim that every supervised learner is
+immune to context reduction.
+
+Across the 120 supported local session/window summary cells, throughput derived
+from recorded test size and prediction time spans approximately 2.5 thousand to
+1.47 million samples/s (median approximately 207 thousand), versus 1.72-1.91
+seconds per remote GPT request. The measurements are not hardware-normalized,
+but they establish that the prompted detector operates in a fundamentally
+different latency regime.
+
+### Cross-Model Comparison
+
+The following figures order nominal temporal scope from largest to smallest on
+the x-axis. Window duration is not a packet-count guarantee because traffic
+intensity varies across sessions. Every cell reports pooled malicious F1; GPT
+grey cells denote experiments that were not executed. In particular, GPT-5.4
+was evaluated for whole sessions and 5 s windows only. The figures therefore
+establish a whole-to-5 s loss but do not justify interpolation or a monotonic
+claim at 30 s or 1 s.
+
+#### Minimal Features
+
+![Minimal-feature F1 by detector and context](figures/session_granularity_minimal.png)
+
+[Vector PDF](figures/session_granularity_minimal.pdf). Minimal metadata is the
+least sensitive balanced GPT configuration (61.00% to 59.95% F1), but deployment
+F1 still falls from 90.33% to 77.66%. The local ensembles remain stable; the main
+counterexample is balanced KNN at 5 s.
+
+#### Mercury-Style Features
+
+![Mercury-style F1 by detector and context](figures/session_granularity_mercury.png)
+
+[Vector PDF](figures/session_granularity_mercury.pdf). Mercury-style context
+raises whole-session GPT F1 over minimal features in balanced evaluation, but its
+5 s deployment representation is brittle: F1 drops from 69.40% to 23.86%. Local
+models remain tightly clustered, with no analogous systematic collapse.
+
+#### Combined Features
+
+![Combined-feature F1 by detector and context](figures/session_granularity_combined.png)
+
+[Vector PDF](figures/session_granularity_combined.pdf). Combining both feature
+families produces the strongest balanced whole-session GPT result (84.41%) but
+does not protect against truncation. Deployment F1 falls from 74.21% to 25.71%,
+whereas RF/XGBoost/LightGBM remain near their whole-session scores. CART's
+isolated 30 s and 1 s balanced failures show why model-specific cells must remain
+visible rather than reporting only the best local detector.
+
+The most plausible mechanism is representation and calibration loss. A whole
+session preserves long-range direction changes, packet-size transitions,
+periodicity, and repeated service behavior. A 5 s slice can omit those events and
+may resemble a benign connection prefix. GPT receives only a small budgeted set
+of labeled memory examples and is not optimized on every training window; the
+local models are fitted directly to all eligible supervised window profiles.
+Short windows also shift score distributions across captures, weakening a
+validation-selected threshold. These are evidence-consistent explanations, not
+causal conclusions: a dedicated multi-window LLM sweep at 30 s and 1 s is needed
+to isolate information loss from prompt representation and threshold transfer.
+
+Important scope limits remain. The corpus contains seven benign and five
+malicious captures, with one malicious capture per evaluated family. Sessions
+and windows require at least six packets. Local and LLM inputs share base
+metadata and split manifests, but their tabular and textual representations are
+not byte-identical. Local models use full folds, whereas GPT uses frozen budgeted
+subsets. Blind prompting, Sonnet 4.6, and fine-tuning paths exist in code but are
+not represented by completed capture-disjoint artifacts in these tables.
+
+See [`results/published/README.md`](results/published/README.md) for fold-level
+records, provenance, and source-artifact hashes. Regenerate the three figures
+with `python scripts/create_session_granularity_chart.py`.
 
 ## Installation
 
@@ -294,7 +406,7 @@ configs/                 model, feature, budget, and protocol settings
 src/                     extraction and experiment implementations
 src/adversarial/         Phase 6 perturbation and evasion code
 tests/                   deterministic split and protocol regression tests
-scripts/                 compact result exporter
+scripts/                 compact result exporter and chart generator
 results/published/       auditable summary JSONs only
 figures/                 publication-facing aggregate figures
 ```

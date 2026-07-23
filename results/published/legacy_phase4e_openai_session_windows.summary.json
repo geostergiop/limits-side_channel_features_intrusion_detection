@@ -1,0 +1,77 @@
+{
+  "schema_version": "legacy_publication_summary_v1",
+  "provenance": {
+    "source_commit": "93208e275b628d72ea3c7d143289e0ca0a2bbe69",
+    "source_artifact": "llm_results_openai_verbose.json",
+    "source_git_blob": "c12c67c7ca719d000e4a848a9f95b042b08561c2",
+    "source_record_count": 3200,
+    "phase4e_record_count": 800
+  },
+  "provider": "openai_inferred_from_source_filename",
+  "model": "not_recorded_in_source_rows",
+  "protocol": {
+    "name": "legacy_phase4e_fixed_balanced_session_cohort",
+    "capture_disjoint": false,
+    "validation_partition": false,
+    "samples_per_window": 200,
+    "support_0": 100,
+    "support_1": 100,
+    "window_unit": "first_n_packets_of_session"
+  },
+  "records": [
+    {
+      "window_size_packets": 5,
+      "n": 200,
+      "tn": 92,
+      "fp": 8,
+      "fn": 0,
+      "tp": 100,
+      "accuracy": 0.96,
+      "precision_1": 0.9259259259259259,
+      "recall_1": 1.0,
+      "f1_1": 0.9615384615384616
+    },
+    {
+      "window_size_packets": 10,
+      "n": 200,
+      "tn": 19,
+      "fp": 81,
+      "fn": 0,
+      "tp": 100,
+      "accuracy": 0.595,
+      "precision_1": 0.5524861878453039,
+      "recall_1": 1.0,
+      "f1_1": 0.7117437722419929
+    },
+    {
+      "window_size_packets": 20,
+      "n": 200,
+      "tn": 1,
+      "fp": 99,
+      "fn": 0,
+      "tp": 100,
+      "accuracy": 0.505,
+      "precision_1": 0.5025125628140703,
+      "recall_1": 1.0,
+      "f1_1": 0.6688963210702341
+    },
+    {
+      "window_size_packets": 50,
+      "n": 200,
+      "tn": 0,
+      "fp": 100,
+      "fn": 0,
+      "tp": 100,
+      "accuracy": 0.5,
+      "precision_1": 0.5,
+      "recall_1": 1.0,
+      "f1_1": 0.6666666666666666
+    }
+  ],
+  "limitations": [
+    "The source rows do not record the exact OpenAI model identifier.",
+    "The cohort is balanced but not capture-disjoint and has no validation partition.",
+    "Packet-count windows are not comparable to Phase 7 time windows.",
+    "This artifact provides no evidence for Claude Sonnet performance."
+  ]
+}
