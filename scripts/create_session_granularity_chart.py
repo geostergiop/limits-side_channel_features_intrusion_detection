@@ -41,6 +41,28 @@ LLM_FILES = {
 LLM_SUPPLEMENTAL_FILE = (
     PUBLISHED / "session_llm_author_supplied_window_sweep.summary.json"
 )
+INPUT_REQUIREMENTS_FILE = PUBLISHED / "session_input_requirements.summary.json"
+PHASE4E_FILE = PUBLISHED / "phase4e_openai_session_windows.summary.json"
+FEATURE_STYLES = {
+    "minimal": {
+        "label": "Minimal (5)",
+        "color": "#1c6b70",
+        "marker": "o",
+        "linestyle": "-",
+    },
+    "mercury": {
+        "label": "Mercury-style (20)",
+        "color": "#b5533c",
+        "marker": "s",
+        "linestyle": "--",
+    },
+    "combined": {
+        "label": "Combined (25)",
+        "color": "#8b6e1e",
+        "marker": "^",
+        "linestyle": "-.",
+    },
+}
 
 
 def _records(path: Path) -> list[dict]:
@@ -218,7 +240,7 @@ def render_feature(
         ax.axhline(0.5, color="#282725", linewidth=1.2)
         ax.set_xticks(range(len(GRANULARITIES)), GRANULARITIES)
         ax.set_yticks(range(len(DETECTORS)), DETECTORS)
-        ax.set_xlabel("Nominal time horizon (decreasing left to right)")
+        ax.set_xlabel("Full-session representation (finer bins to right)")
         ax.set_title(f"{mode.capitalize()} evaluation")
         ax.tick_params(length=0)
         for spine in ax.spines.values():
@@ -231,7 +253,7 @@ def render_feature(
         "combined": "Combined features (25)",
     }[feature]
     fig.suptitle(
-        f"{feature_label}: capture-disjoint F1 by context granularity",
+        f"{feature_label}: capture-disjoint F1 by full-session representation",
         fontsize=16,
         fontweight="bold",
         color="#173b38",
@@ -240,8 +262,8 @@ def render_feature(
     fig.text(
         0.5,
         1.075,
-        "Malicious-class F1 (%). Whole/5 s values use stored confusion counts; "
-        "*30/1 s GPT values are author-supplied F1-only results.",
+        "All representations cover complete sessions; 30/5/1 s denote behavior-bin "
+        "widths. *30/1 s GPT values are author-supplied F1-only results.",
         ha="center",
         fontsize=9.5,
         color="#4b4a46",
@@ -265,7 +287,7 @@ def render_feature(
 def render_llm_degradation(
     values: dict[tuple[str, str, str, str], float],
 ) -> None:
-    """Render GPT context-sensitivity curves for both evaluation protocols."""
+    """Render GPT serialization-sensitivity curves for both protocols."""
     plt.rcParams.update(
         {
             "font.family": "DejaVu Serif",
@@ -275,26 +297,6 @@ def render_llm_degradation(
             "axes.facecolor": "#fbfaf7",
         }
     )
-    styles = {
-        "minimal": {
-            "label": "Minimal (5)",
-            "color": "#1c6b70",
-            "marker": "o",
-            "linestyle": "-",
-        },
-        "mercury": {
-            "label": "Mercury-style (20)",
-            "color": "#b5533c",
-            "marker": "s",
-            "linestyle": "--",
-        },
-        "combined": {
-            "label": "Combined (25)",
-            "color": "#8b6e1e",
-            "marker": "^",
-            "linestyle": "-.",
-        },
-    }
     label_offsets = {
         "balanced": {"minimal": -13, "mercury": 9, "combined": 9},
         "deployment": {"minimal": 9, "mercury": -14, "combined": 9},
@@ -314,7 +316,7 @@ def render_llm_degradation(
     for mode_index, mode in enumerate(MODES):
         ax = axes[mode_index]
         for feature in FEATURES:
-            style = styles[feature]
+            style = FEATURE_STYLES[feature]
             series = np.array(
                 [
                     100 * values[(mode, feature, "GPT-5.4", granularity)]
@@ -368,7 +370,7 @@ def render_llm_degradation(
         ax.text(
             0.02,
             0.035,
-            "Whole to 1 s loss: "
+            "Whole encoding to 1 s-bin loss: "
             f"Minimal {losses[0]:.1f} pp | Mercury {losses[1]:.1f} pp | "
             f"Combined {losses[2]:.1f} pp",
             transform=ax.transAxes,
@@ -387,7 +389,7 @@ def render_llm_degradation(
         ax.set_yticks(np.arange(0, 101, 20))
         ax.grid(axis="y", color="#d6d2c9", linewidth=0.7, alpha=0.8)
         ax.set_axisbelow(True)
-        ax.set_xlabel("Observation horizon (decreasing left to right)")
+        ax.set_xlabel("Full-session representation (finer bins to right)")
         ax.set_title(
             "Balanced evaluation (50.00% malicious)"
             if mode == "balanced"
@@ -401,7 +403,7 @@ def render_llm_degradation(
 
     axes[0].set_ylabel("Malicious-class F1 (%)")
     fig.suptitle(
-        "GPT-5.4 F1 across decreasing session context",
+        "GPT-5.4 F1 across complete-session encodings",
         fontsize=16,
         fontweight="bold",
         color="#173b38",
@@ -410,8 +412,8 @@ def render_llm_degradation(
     fig.text(
         0.5,
         0.91,
-        "Lines connect four evaluated categorical horizons; they do not "
-        "interpolate untested durations. *Author-supplied F1-only result.",
+        "Every point covers the complete session; 30/5/1 s denote bin widths, "
+        "not capture prefixes. *Author-supplied F1-only result.",
         ha="center",
         fontsize=9.4,
         color="#4b4a46",
@@ -436,9 +438,210 @@ def render_llm_degradation(
     print(f"Wrote {pdf_path.relative_to(ROOT)}")
 
 
+def render_production_input_tradeoff() -> None:
+    """Render projected prefix input growth beside Phase 4E prefix evidence."""
+    requirements = json.loads(INPUT_REQUIREMENTS_FILE.read_text(encoding="utf-8"))
+    phase4e = json.loads(PHASE4E_FILE.read_text(encoding="utf-8"))
+    projection = requirements["production_prefix_projection"]
+    if projection["status"] != "data_volume_projection_not_detector_accuracy_experiment":
+        raise ValueError("Unexpected production-prefix projection status")
+
+    raw_by_context = {
+        row["context"]: row for row in projection["raw_context_records"]
+    }
+    value_by_key = {
+        (row["feature_set"], row["context"]): float(
+            row["numeric_metadata_values"]["mean"]
+        )
+        for row in projection["feature_records"]
+    }
+    contexts = ("1 s", "5 s", "30 s", "Whole")
+    x = np.arange(len(contexts))
+
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Serif",
+            "font.size": 9,
+            "axes.titlesize": 11,
+            "figure.facecolor": "#fbfaf7",
+            "axes.facecolor": "#fbfaf7",
+        }
+    )
+    fig, axes = plt.subplots(1, 2, figsize=(11.8, 5.7))
+    fig.subplots_adjust(
+        left=0.07,
+        right=0.985,
+        bottom=0.17,
+        top=0.72,
+        wspace=0.17,
+    )
+
+    ax = axes[0]
+    for feature in FEATURES:
+        style = FEATURE_STYLES[feature]
+        series = np.asarray(
+            [value_by_key[(feature, context)] for context in contexts], dtype=float
+        )
+        ax.plot(
+            x,
+            series,
+            color=style["color"],
+            marker=style["marker"],
+            linestyle=style["linestyle"],
+            linewidth=2.4,
+            markersize=6.5,
+            markeredgecolor="#fbfaf7",
+            markeredgewidth=0.8,
+            label=style["label"],
+        )
+        for point_index, value in enumerate(series):
+            ax.annotate(
+                f"{value:.1f}",
+                (point_index, value),
+                xytext=(0, 8),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8.1,
+                fontweight="bold",
+                color=style["color"],
+            )
+
+    x_labels = []
+    for context in contexts:
+        raw = raw_by_context[context]
+        mean_packets = float(raw["packet_count"]["mean"])
+        mean_kib = float(raw["observed_wire_bytes"]["mean"]) / 1024.0
+        x_labels.append(f"{context}\n{mean_packets:.1f} pkt / {mean_kib:.1f} KiB wire")
+    ax.set_xticks(x, x_labels)
+    ax.set_xlim(-0.15, len(contexts) - 0.85)
+    ax.set_ylim(0, 175)
+    ax.set_yticks(np.arange(0, 176, 25))
+    ax.set_ylabel("Mean numeric metadata values per decision")
+    ax.set_xlabel("Projected observation prefix (increasing left to right)")
+    ax.set_title("Projected bounded-prefix input (6,000 sessions)")
+    ax.grid(axis="y", color="#d6d2c9", linewidth=0.7, alpha=0.8)
+    ax.legend(loc="upper left", frameon=False)
+    ax.text(
+        0.02,
+        0.035,
+        "Projection only: no Phase 7 F1 is assigned to these prefixes",
+        transform=ax.transAxes,
+        fontsize=8.1,
+        color="#3f423f",
+        bbox={
+            "boxstyle": "round,pad=0.35",
+            "facecolor": "#eeece5",
+            "edgecolor": "#c7c2b7",
+            "linewidth": 0.7,
+        },
+    )
+
+    ax = axes[1]
+    phase4e_styles = {
+        "accuracy": ("Accuracy", "#2a5c82", "o", "-"),
+        "precision_1": ("Precision", "#b5533c", "s", "--"),
+        "f1_1": ("F1", "#8b6e1e", "^", "-."),
+    }
+    if phase4e.get("protocol", {}).get("capture_disjoint") is not False:
+        raise ValueError("Phase 4E chart requires the documented weaker protocol")
+    phase4e_rows = sorted(phase4e["records"], key=lambda row: row["window_size_packets"])
+    packet_windows = [int(row["window_size_packets"]) for row in phase4e_rows]
+    if packet_windows != [5, 10, 20, 50]:
+        raise ValueError(f"Unexpected Phase 4E packet prefixes: {packet_windows}")
+    if any(float(row["recall_1"]) != 1.0 for row in phase4e_rows):
+        raise ValueError("Phase 4E recall callout no longer matches source records")
+    if [int(phase4e_rows[0]["fp"]), int(phase4e_rows[-1]["fp"])] != [8, 100]:
+        raise ValueError("Phase 4E false-positive callout no longer matches records")
+    phase_x = np.arange(len(packet_windows))
+    for metric, (label, color, marker, linestyle) in phase4e_styles.items():
+        series = np.asarray([100 * float(row[metric]) for row in phase4e_rows])
+        ax.plot(
+            phase_x,
+            series,
+            color=color,
+            marker=marker,
+            linestyle=linestyle,
+            linewidth=2.4,
+            markersize=6.5,
+            markeredgecolor="#fbfaf7",
+            markeredgewidth=0.8,
+            label=label,
+        )
+        offset = {"accuracy": 19, "precision_1": -15, "f1_1": 4}[metric]
+        for point_index, value in enumerate(series):
+            ax.annotate(
+                f"{value:.1f}",
+                (point_index, value),
+                xytext=(0, offset),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8.1,
+                fontweight="bold",
+                color=color,
+            )
+    ax.set_xticks(phase_x, [str(value) for value in packet_windows])
+    ax.set_xlim(-0.15, len(packet_windows) - 0.85)
+    ax.set_ylim(0, 105)
+    ax.set_yticks(np.arange(0, 101, 20))
+    ax.set_ylabel("Held-out metric (%)")
+    ax.set_xlabel("First N packets retained from each session")
+    ax.set_title("Phase 4E packet-prefix evidence (weaker protocol)")
+    ax.grid(axis="y", color="#d6d2c9", linewidth=0.7, alpha=0.8)
+    ax.legend(loc="upper right", frameon=False)
+    ax.text(
+        0.02,
+        0.035,
+        "Recall = 100% throughout; false positives rise from 8 to 100",
+        transform=ax.transAxes,
+        fontsize=8.1,
+        color="#3f423f",
+        bbox={
+            "boxstyle": "round,pad=0.35",
+            "facecolor": "#eeece5",
+            "edgecolor": "#c7c2b7",
+            "linewidth": 0.7,
+        },
+    )
+
+    for ax in axes:
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#827d73")
+        ax.spines["bottom"].set_color("#827d73")
+        ax.tick_params(length=0, color="#827d73")
+
+    fig.suptitle(
+        "Production observation scope: input growth and prefix evidence",
+        fontsize=16,
+        fontweight="bold",
+        color="#173b38",
+        y=0.965,
+    )
+    fig.text(
+        0.5,
+        0.905,
+        "Left: data-volume projection on the deployment cohort. Right: measured "
+        "Phase 4E results. The protocols are not pooled.",
+        ha="center",
+        fontsize=9.4,
+        color="#4b4a46",
+    )
+
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    png_path = FIGURES / "session_production_input_tradeoff.png"
+    pdf_path = FIGURES / "session_production_input_tradeoff.pdf"
+    fig.savefig(png_path, dpi=220, bbox_inches="tight")
+    fig.savefig(pdf_path, bbox_inches="tight", metadata=PDF_METADATA)
+    plt.close(fig)
+    print(f"Wrote {png_path.relative_to(ROOT)}")
+    print(f"Wrote {pdf_path.relative_to(ROOT)}")
+
+
 def main() -> None:
     values = collect_values()
     render_llm_degradation(values)
+    render_production_input_tradeoff()
     for feature in FEATURES:
         render_feature(values, feature)
 

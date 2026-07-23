@@ -1,0 +1,721 @@
+{
+  "schema_version": "session_input_requirements_v1",
+  "provenance": {
+    "database": "traffic.db",
+    "database_in_public_repository": false,
+    "reference_manifest": "session_sequence_capture_disjoint_5fold_deployment__ebcc79127fe9.json",
+    "reference_manifest_sha256": "a2fc8029c1aeaf551f08838a958a4482b300d40a9f66b30ac33ffeb76f5a77f7",
+    "manifest_hash": "9aa614c4dd93a150",
+    "cohort_hash": "138179c8aa751c29",
+    "verified_equivalent_window_manifests": [
+      {
+        "artifact": "behavior_window_capture_disjoint_5fold_deployment_1p0s__fe8bbb80c690.json",
+        "sha256": "0a14621691df7cc39ae0643fa9493cfb6be4f1c12b6d379719051cc46ddbd894",
+        "n_sessions": 6000
+      },
+      {
+        "artifact": "behavior_window_capture_disjoint_5fold_deployment_5p0s__ab1879e60c45.json",
+        "sha256": "711d7c59b3e1df25d6b115116126f6a3a33eab76fbe3fa597fcd67806df6007c",
+        "n_sessions": 6000
+      },
+      {
+        "artifact": "behavior_window_capture_disjoint_5fold_deployment_30p0s__c5e7e8a8670f.json",
+        "sha256": "6b95d230c3a034b0361e5ec4fa224c8a8deeab5d8004c9b844e6a6b3a6871944",
+        "n_sessions": 6000
+      }
+    ],
+    "n_sessions": 6000
+  },
+  "production_prefix_projection": {
+    "status": "data_volume_projection_not_detector_accuracy_experiment",
+    "raw_context_records": [
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "packet_count": {
+          "mean": 16.0115,
+          "median": 8.0,
+          "p25": 2.0,
+          "p75": 18.0,
+          "p95": 39.0,
+          "max": 1121.0,
+          "sum": 96069.0
+        },
+        "observed_wire_bytes": {
+          "mean": 2449.5543333333335,
+          "median": 676.0,
+          "p25": 184.0,
+          "p75": 1861.25,
+          "p95": 9879.800000000003,
+          "max": 143625.0,
+          "sum": 14697326.0
+        },
+        "note": "Wire bytes traverse the sensor; they are not retained LLM payload"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "packet_count": {
+          "mean": 28.845833333333335,
+          "median": 14.0,
+          "p25": 6.0,
+          "p75": 21.0,
+          "p95": 72.0,
+          "max": 2038.0,
+          "sum": 173075.0
+        },
+        "observed_wire_bytes": {
+          "mean": 3834.4495,
+          "median": 1072.0,
+          "p25": 552.0,
+          "p75": 3078.5,
+          "p95": 10644.0,
+          "max": 488375.0,
+          "sum": 23006697.0
+        },
+        "note": "Wire bytes traverse the sensor; they are not retained LLM payload"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "packet_count": {
+          "mean": 37.5825,
+          "median": 16.0,
+          "p25": 6.0,
+          "p75": 23.0,
+          "p95": 95.0,
+          "max": 5860.0,
+          "sum": 225495.0
+        },
+        "observed_wire_bytes": {
+          "mean": 5106.074166666666,
+          "median": 1270.0,
+          "p25": 552.0,
+          "p75": 4002.5,
+          "p95": 10644.0,
+          "max": 1571814.0,
+          "sum": 30636445.0
+        },
+        "note": "Wire bytes traverse the sensor; they are not retained LLM payload"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "packet_count": {
+          "mean": 84.4175,
+          "median": 18.0,
+          "p25": 6.0,
+          "p75": 27.0,
+          "p95": 123.05000000000018,
+          "max": 86157.0,
+          "sum": 506505.0
+        },
+        "observed_wire_bytes": {
+          "mean": 12535.791333333333,
+          "median": 1486.0,
+          "p25": 552.0,
+          "p75": 5119.5,
+          "p95": 12641.350000000002,
+          "max": 18620487.0,
+          "sum": 75214748.0
+        },
+        "note": "Wire bytes traverse the sensor; they are not retained LLM payload"
+      }
+    ],
+    "feature_records": [
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "numeric_metadata_values": {
+          "mean": 25.943666666666665,
+          "median": 17.0,
+          "p25": 17.0,
+          "p75": 31.0,
+          "p95": 45.0,
+          "max": 451.0,
+          "sum": 155662.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "numeric_metadata_values": {
+          "mean": 75.10866666666666,
+          "median": 47.0,
+          "p25": 47.0,
+          "p75": 91.0,
+          "p95": 135.0,
+          "max": 1411.0,
+          "sum": 450652.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "numeric_metadata_values": {
+          "mean": 91.497,
+          "median": 57.0,
+          "p25": 57.0,
+          "p75": 111.0,
+          "p95": 165.0,
+          "max": 1731.0,
+          "sum": 548982.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "numeric_metadata_values": {
+          "mean": 32.465333333333334,
+          "median": 17.0,
+          "p25": 17.0,
+          "p75": 31.0,
+          "p95": 73.0,
+          "max": 451.0,
+          "sum": 194792.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "numeric_metadata_values": {
+          "mean": 95.60533333333333,
+          "median": 47.0,
+          "p25": 47.0,
+          "p75": 91.0,
+          "p95": 223.0,
+          "max": 1411.0,
+          "sum": 573632.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "numeric_metadata_values": {
+          "mean": 116.652,
+          "median": 57.0,
+          "p25": 57.0,
+          "p75": 111.0,
+          "p95": 273.0,
+          "max": 1731.0,
+          "sum": 699912.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "numeric_metadata_values": {
+          "mean": 35.748333333333335,
+          "median": 17.0,
+          "p25": 17.0,
+          "p75": 31.0,
+          "p95": 87.0,
+          "max": 451.0,
+          "sum": 214490.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "numeric_metadata_values": {
+          "mean": 105.92333333333333,
+          "median": 47.0,
+          "p25": 47.0,
+          "p75": 91.0,
+          "p95": 267.0,
+          "max": 1411.0,
+          "sum": 635540.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "numeric_metadata_values": {
+          "mean": 129.315,
+          "median": 57.0,
+          "p25": 57.0,
+          "p75": 111.0,
+          "p95": 327.0,
+          "max": 1731.0,
+          "sum": 775890.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "numeric_metadata_values": {
+          "mean": 40.894333333333336,
+          "median": 30.0,
+          "p25": 16.0,
+          "p75": 30.0,
+          "p95": 114.0,
+          "max": 450.0,
+          "sum": 245366.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "numeric_metadata_values": {
+          "mean": 124.23933333333333,
+          "median": 90.0,
+          "p25": 46.0,
+          "p75": 90.0,
+          "p95": 354.0,
+          "max": 1410.0,
+          "sum": 745436.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "combined",
+        "n_features": 25,
+        "numeric_metadata_values": {
+          "mean": 152.021,
+          "median": 110.0,
+          "p25": 56.0,
+          "p75": 110.0,
+          "p95": 434.0,
+          "max": 1730.0,
+          "sum": 912126.0
+        },
+        "encoding": "ordered_packet_segments_over_first_prefix_only"
+      }
+    ]
+  },
+  "current_phase7_full_session_encoding": {
+    "status": "measured_structure_over_complete_sessions",
+    "same_raw_packets_at_every_bin_width": true,
+    "total_sessions": 6000,
+    "total_packets": 506505,
+    "total_observed_wire_bytes": 75214748,
+    "feature_records": [
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "reported_summaries": {
+          "mean": 4.992,
+          "median": 4.0,
+          "p25": 2.0,
+          "p75": 5.0,
+          "p95": 16.0,
+          "max": 32.0,
+          "sum": 29952.0
+        },
+        "numeric_metadata_values": {
+          "mean": 89.864,
+          "median": 73.0,
+          "p25": 39.0,
+          "p75": 90.0,
+          "p95": 277.0,
+          "max": 549.0,
+          "sum": 539184.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "reported_summaries": {
+          "mean": 4.992,
+          "median": 4.0,
+          "p25": 2.0,
+          "p75": 5.0,
+          "p95": 16.0,
+          "max": 32.0,
+          "sum": 29952.0
+        },
+        "numeric_metadata_values": {
+          "mean": 239.624,
+          "median": 193.0,
+          "p25": 99.0,
+          "p75": 240.0,
+          "p95": 757.0,
+          "max": 1509.0,
+          "sum": 1437744.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "1 s",
+        "seconds": 1.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "reported_summaries": {
+          "mean": 4.992,
+          "median": 4.0,
+          "p25": 2.0,
+          "p75": 5.0,
+          "p95": 16.0,
+          "max": 32.0,
+          "sum": 29952.0
+        },
+        "numeric_metadata_values": {
+          "mean": 289.544,
+          "median": 233.0,
+          "p25": 119.0,
+          "p75": 290.0,
+          "p95": 917.0,
+          "max": 1829.0,
+          "sum": 1737264.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "reported_summaries": {
+          "mean": 2.901666666666667,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 3.0,
+          "p95": 11.0,
+          "max": 32.0,
+          "sum": 17410.0
+        },
+        "numeric_metadata_values": {
+          "mean": 54.32833333333333,
+          "median": 22.0,
+          "p25": 22.0,
+          "p75": 56.0,
+          "p95": 192.0,
+          "max": 549.0,
+          "sum": 325970.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "reported_summaries": {
+          "mean": 2.901666666666667,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 3.0,
+          "p95": 11.0,
+          "max": 32.0,
+          "sum": 17410.0
+        },
+        "numeric_metadata_values": {
+          "mean": 141.37833333333333,
+          "median": 52.0,
+          "p25": 52.0,
+          "p75": 146.0,
+          "p95": 522.0,
+          "max": 1509.0,
+          "sum": 848270.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "5 s",
+        "seconds": 5.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "reported_summaries": {
+          "mean": 2.901666666666667,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 3.0,
+          "p95": 11.0,
+          "max": 32.0,
+          "sum": 17410.0
+        },
+        "numeric_metadata_values": {
+          "mean": 170.395,
+          "median": 62.0,
+          "p25": 62.0,
+          "p75": 176.0,
+          "p95": 632.0,
+          "max": 1829.0,
+          "sum": 1022370.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "reported_summaries": {
+          "mean": 1.873,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 1.0,
+          "p95": 5.0,
+          "max": 32.0,
+          "sum": 11238.0
+        },
+        "numeric_metadata_values": {
+          "mean": 36.841,
+          "median": 22.0,
+          "p25": 22.0,
+          "p75": 22.0,
+          "p95": 90.0,
+          "max": 549.0,
+          "sum": 221046.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "reported_summaries": {
+          "mean": 1.873,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 1.0,
+          "p95": 5.0,
+          "max": 32.0,
+          "sum": 11238.0
+        },
+        "numeric_metadata_values": {
+          "mean": 93.031,
+          "median": 52.0,
+          "p25": 52.0,
+          "p75": 52.0,
+          "p95": 240.0,
+          "max": 1509.0,
+          "sum": 558186.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "30 s",
+        "seconds": 30.0,
+        "feature_set": "combined",
+        "n_features": 25,
+        "reported_summaries": {
+          "mean": 1.873,
+          "median": 1.0,
+          "p25": 1.0,
+          "p75": 1.0,
+          "p95": 5.0,
+          "max": 32.0,
+          "sum": 11238.0
+        },
+        "numeric_metadata_values": {
+          "mean": 111.761,
+          "median": 62.0,
+          "p25": 62.0,
+          "p75": 62.0,
+          "p95": 290.0,
+          "max": 1829.0,
+          "sum": 670566.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "minimal",
+        "n_features": 5,
+        "reported_summaries": {
+          "mean": 2.7781666666666665,
+          "median": 2.0,
+          "p25": 1.0,
+          "p75": 2.0,
+          "p95": 8.0,
+          "max": 32.0,
+          "sum": 16669.0
+        },
+        "numeric_metadata_values": {
+          "mean": 40.894333333333336,
+          "median": 30.0,
+          "p25": 16.0,
+          "p75": 30.0,
+          "p95": 114.0,
+          "max": 450.0,
+          "sum": 245366.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "mercury",
+        "n_features": 20,
+        "reported_summaries": {
+          "mean": 2.7781666666666665,
+          "median": 2.0,
+          "p25": 1.0,
+          "p75": 2.0,
+          "p95": 8.0,
+          "max": 32.0,
+          "sum": 16669.0
+        },
+        "numeric_metadata_values": {
+          "mean": 124.23933333333333,
+          "median": 90.0,
+          "p25": 46.0,
+          "p75": 90.0,
+          "p95": 354.0,
+          "max": 1410.0,
+          "sum": 745436.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      },
+      {
+        "context": "Whole",
+        "seconds": null,
+        "feature_set": "combined",
+        "n_features": 25,
+        "reported_summaries": {
+          "mean": 2.7781666666666665,
+          "median": 2.0,
+          "p25": 1.0,
+          "p75": 2.0,
+          "p95": 8.0,
+          "max": 32.0,
+          "sum": 16669.0
+        },
+        "numeric_metadata_values": {
+          "mean": 152.021,
+          "median": 110.0,
+          "p25": 56.0,
+          "p75": 110.0,
+          "p95": 434.0,
+          "max": 1730.0,
+          "sum": 912126.0
+        },
+        "encoding": "complete_session_current_phase7_protocol"
+      }
+    ],
+    "observed_api_token_records": [
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "minimal",
+        "representation": "Whole",
+        "mean_total_api_tokens": 2607.5596153846154,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "minimal",
+        "representation": "5 s",
+        "mean_total_api_tokens": 2783.528846153846,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "mercury",
+        "representation": "Whole",
+        "mean_total_api_tokens": 4146.663461538463,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "mercury",
+        "representation": "5 s",
+        "mean_total_api_tokens": 4289.213461538461,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "combined",
+        "representation": "Whole",
+        "mean_total_api_tokens": 4295.6057692307695,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "balanced",
+        "feature_set": "combined",
+        "representation": "5 s",
+        "mean_total_api_tokens": 4129.636538461538,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "minimal",
+        "representation": "Whole",
+        "mean_total_api_tokens": 2246.5781818181817,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "minimal",
+        "representation": "5 s",
+        "mean_total_api_tokens": 2436.398181818182,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "mercury",
+        "representation": "Whole",
+        "mean_total_api_tokens": 4058.112727272727,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "mercury",
+        "representation": "5 s",
+        "mean_total_api_tokens": 4211.052727272728,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "combined",
+        "representation": "Whole",
+        "mean_total_api_tokens": 4261.113636363637,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      },
+      {
+        "evaluation_mode": "deployment",
+        "feature_set": "combined",
+        "representation": "5 s",
+        "mean_total_api_tokens": 4062.0127272727273,
+        "note": "Includes system, memory, held-out input, and output tokens"
+      }
+    ]
+  },
+  "limitations": [
+    "Prefix values project input volume only; Phase 7 F1 cannot be assigned to them.",
+    "Numeric metadata counts exclude JSON syntax, feature-name strings, system prompts, memory examples, and model output.",
+    "Observed wire bytes are packet_size sums, not bytes that a metadata-only detector must retain.",
+    "The cohort is not an enterprise throughput, flow-concurrency, or memory benchmark."
+  ]
+}

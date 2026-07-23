@@ -71,7 +71,7 @@
   "limitations": [
     "The source rows do not record the exact OpenAI model identifier.",
     "The cohort is balanced but not capture-disjoint and has no validation partition.",
-    "Packet-count windows are not comparable to Phase 7 time windows.",
+    "Packet-count prefixes are not directly comparable to Phase 7 complete-session time-bin representations.",
     "This artifact provides no evidence for Claude Sonnet performance."
   ]
 }

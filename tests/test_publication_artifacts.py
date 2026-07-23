@@ -38,7 +38,7 @@ class PublicationArtifactTests(unittest.TestCase):
         self.assertEqual(_cell_label("GPT-5.4", "1 s", 0.556), "55.6*")
         self.assertEqual(_cell_label("GPT-5.4", "5 s", 0.5995), "60.0")
 
-    def test_reported_gpt_context_losses_match_published_counts(self):
+    def test_reported_gpt_encoding_losses_match_published_counts(self):
         values = collect_values()
         self.assertAlmostEqual(
             values[("balanced", "combined", "GPT-5.4", "Whole")],
@@ -57,7 +57,7 @@ class PublicationArtifactTests(unittest.TestCase):
             0.257062146892655,
         )
 
-    def test_completed_gpt_sweeps_have_reported_context_ordering(self):
+    def test_completed_gpt_sweeps_have_reported_encoding_ordering(self):
         values = collect_values()
         granularities = ("Whole", "30 s", "5 s", "1 s")
         expected_losses = {
@@ -78,9 +78,13 @@ class PublicationArtifactTests(unittest.TestCase):
             self.assertAlmostEqual(series[0] - series[-1], expected_loss)
 
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("completed four-horizon sweep", readme)
+        self.assertIn("completed four-representation sweep", readme)
         self.assertNotIn("dedicated multi-window LLM sweep", readme)
         self.assertNotIn("points strengthen the observed degradation", readme)
+        self.assertNotIn("nominal temporal scope", readme)
+        self.assertNotIn("reducing temporal scope", readme)
+        self.assertIn("does **not** truncate", readme)
+        self.assertIn("complete session into nonempty", readme)
 
     def test_reported_local_winners_match_published_summaries(self):
         values = collect_values()
@@ -126,6 +130,78 @@ class PublicationArtifactTests(unittest.TestCase):
             relative = f"figures/session_granularity_{feature}.png"
             self.assertIn(relative, readme)
             self.assertTrue((ROOT / relative).is_file())
+        tradeoff_png = "figures/session_production_input_tradeoff.png"
+        tradeoff_pdf = "figures/session_production_input_tradeoff.pdf"
+        self.assertIn(tradeoff_png, readme)
+        self.assertIn(tradeoff_pdf, readme)
+        self.assertTrue((ROOT / tradeoff_png).is_file())
+        tradeoff_pdf_bytes = (ROOT / tradeoff_pdf).read_bytes()
+        self.assertEqual(tradeoff_pdf_bytes[:5], b"%PDF-")
+        self.assertNotIn(b"/CreationDate", tradeoff_pdf_bytes)
+
+    def test_session_input_requirements_are_cohort_consistent(self):
+        path = (
+            ROOT
+            / "results"
+            / "published"
+            / "session_input_requirements.summary.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], "session_input_requirements_v1")
+        self.assertEqual(payload["provenance"]["n_sessions"], 6000)
+        self.assertEqual(
+            len(payload["provenance"]["verified_equivalent_window_manifests"]),
+            3,
+        )
+
+        current = payload["current_phase7_full_session_encoding"]
+        self.assertTrue(current["same_raw_packets_at_every_bin_width"])
+        self.assertEqual(current["total_sessions"], 6000)
+        self.assertEqual(current["total_packets"], 506505)
+        self.assertEqual(current["total_observed_wire_bytes"], 75214748)
+        self.assertEqual(len(current["observed_api_token_records"]), 12)
+
+        projection = payload["production_prefix_projection"]
+        self.assertEqual(
+            projection["status"],
+            "data_volume_projection_not_detector_accuracy_experiment",
+        )
+        raw = {row["context"]: row for row in projection["raw_context_records"]}
+        contexts = ("1 s", "5 s", "30 s", "Whole")
+        for field in ("packet_count", "observed_wire_bytes"):
+            means = [raw[context][field]["mean"] for context in contexts]
+            self.assertEqual(means, sorted(means))
+        self.assertAlmostEqual(raw["1 s"]["packet_count"]["mean"], 16.0115)
+        self.assertAlmostEqual(raw["Whole"]["packet_count"]["mean"], 84.4175)
+        self.assertEqual(int(raw["Whole"]["packet_count"]["sum"]), 506505)
+        self.assertEqual(
+            int(raw["Whole"]["observed_wire_bytes"]["sum"]),
+            75214748,
+        )
+
+        feature_rows = {
+            (row["feature_set"], row["context"]): row
+            for row in projection["feature_records"]
+        }
+        expected_whole_means = {
+            "minimal": 40.894333333333336,
+            "mercury": 124.23933333333333,
+            "combined": 152.021,
+        }
+        for feature, expected_mean in expected_whole_means.items():
+            means = [
+                feature_rows[(feature, context)]["numeric_metadata_values"]["mean"]
+                for context in contexts
+            ]
+            self.assertEqual(means, sorted(means))
+            self.assertAlmostEqual(means[-1], expected_mean)
+
+    def test_phase7_and_phase4e_are_not_conflated_in_publication_text(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Phase 4E provides the repository's actual bounded-prefix evidence", readme)
+        self.assertIn("The panels are deliberately not pooled", readme)
+        self.assertIn("Phase 7 1 s/5 s/30 s F1 values", readme)
+        self.assertIn("does not justify a broad claim", readme)
 
     def test_phase4e_metrics_recompute_from_confusion_counts(self):
         path = (
@@ -157,7 +233,10 @@ class PublicationArtifactTests(unittest.TestCase):
                 ),
             ]
         )
-        self.assertIn("The Phase 4E archive", text)
+        self.assertIn(
+            "Phase 4E provides the repository's actual bounded-prefix evidence",
+            text,
+        )
         self.assertIn("phase4e_openai_session_windows", text)
 
 

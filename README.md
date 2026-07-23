@@ -13,12 +13,12 @@ checkpoints, and prediction-level outputs are intentionally excluded.
 ## What Is Evaluated
 
 Phase 7 is the current session experiment suite. It crosses three feature sets,
-three observation units, two evaluation modes, and several detector families.
+three serialization units, two evaluation modes, and several detector families.
 
 | Dimension | Configurations |
 |---|---|
 | Feature set | `minimal`, `mercury`, `combined` |
-| Observation unit | whole `session_sequence`, fixed `behavior_window`, single-packet `packet_ablation` |
+| Serialization unit | whole-session `session_sequence`, complete-session fixed-duration `behavior_window` bins, single-packet `packet_ablation` |
 | Evaluation mode | `balanced`, `deployment` |
 | Local detector | RF, XGBoost, LightGBM, CART, KNN |
 | Prompted detector | OpenAI GPT-5.4 or Anthropic Claude Sonnet 4.6, blind or training-memory context |
@@ -26,9 +26,14 @@ three observation units, two evaluation modes, and several detector families.
 | Primary split | `capture_disjoint_5fold` |
 | Secondary split | `within_capture_temporal` seen-capture upper bound |
 
-`packet_ablation` is retained only to compare against simpler packet-level
-experiments. Whole sessions and behavior windows are the primary deployment
-units.
+`session_sequence` summarizes the complete eligible session in ordered
+packet-count segments. Despite its name, `behavior_window` does **not** truncate
+the observation to the first 1, 5, or 30 seconds and does not create one sample
+per time window. It partitions the same complete session into nonempty
+fixed-duration bins and compresses them to at most 32 ordered summaries.
+Consequently, the Phase 7 window sweep tests representation granularity, not
+early-stream detection or reduced capture volume. `packet_ablation` is retained
+only to compare against simpler packet-level experiments.
 
 ### Feature Sets
 
@@ -63,10 +68,10 @@ malware dense than operational traffic.
 
 | Mode and test path | Benign test samples | Malicious test samples | Total |
 |---|---:|---:|---:|
-| Balanced, local whole session or time window | 2,140 (50.00%) | 2,140 (50.00%) | 4,280 |
+| Balanced, local complete-session representation | 2,140 (50.00%) | 2,140 (50.00%) | 4,280 |
 | Balanced, local packet ablation | 1,070 (50.00%) | 1,070 (50.00%) | 2,140 |
 | Balanced, expanded GPT variant | 260 (50.00%) | 260 (50.00%) | 520 |
-| Deployment, local whole session or time window | 2,823 (47.05%) | 3,177 (52.95%) | 6,000 |
+| Deployment, local complete-session representation | 2,823 (47.05%) | 3,177 (52.95%) | 6,000 |
 | Deployment, expanded GPT variant | 557 (50.64%) | 543 (49.36%) | 1,100 |
 
 The complete deployment folds are highly heterogeneous: their malicious rates
@@ -87,64 +92,73 @@ the published JSON summaries and should accompany any pooled value.
 ### LLM Results
 
 Table 1 reports every configuration in the expanded, memory-enabled GPT-5.4
-session/window runs. Balanced cells contain 520 held-out decisions per variant
+complete-session runs for which full confusion counts are available. Balanced
+cells contain 520 held-out decisions per variant
 (104 per fold, equally divided by class). Deployment cells contain 1,100 test
 decisions per variant (220 per fold, 49.36% malicious); their thresholds were
 selected using separate validation requests and were never tuned on these test
 labels.
 
-| Evaluation | Context | Features | Test n | Accuracy | Precision | Recall | Pooled F1 | Mean s/query |
+| Evaluation | Representation | Features | Test n | Accuracy | Precision | Recall | Pooled F1 | Mean s/query |
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | Balanced | Whole session | Minimal | 520 | 70.00% | 87.14% | 46.92% | 61.00% | 1.909 |
-| Balanced | 5 s window | Minimal | 520 | 66.35% | 74.01% | 50.38% | 59.95% | 1.813 |
+| Balanced | Complete session, 5 s bins | Minimal | 520 | 66.35% | 74.01% | 50.38% | 59.95% | 1.813 |
 | Balanced | Whole session | Mercury-style | 520 | 79.81% | 90.58% | 66.54% | 76.72% | 1.799 |
-| Balanced | 5 s window | Mercury-style | 520 | 65.38% | 67.54% | 59.23% | 63.11% | 1.875 |
+| Balanced | Complete session, 5 s bins | Mercury-style | 520 | 65.38% | 67.54% | 59.23% | 63.11% | 1.875 |
 | Balanced | Whole session | Combined | 520 | 85.58% | 91.86% | 78.08% | **84.41%** | 1.850 |
-| Balanced | 5 s window | Combined | 520 | 71.35% | 72.47% | 68.85% | 70.61% | 1.823 |
+| Balanced | Complete session, 5 s bins | Combined | 520 | 71.35% | 72.47% | 68.85% | 70.61% | 1.823 |
 | Deployment | Whole session | Minimal | 1,100 | 90.36% | 89.51% | 91.16% | **90.33%** | 1.802 |
-| Deployment | 5 s window | Minimal | 1,100 | 79.55% | 84.27% | 72.01% | 77.66% | 1.742 |
+| Deployment | Complete session, 5 s bins | Minimal | 1,100 | 79.55% | 84.27% | 72.01% | 77.66% | 1.742 |
 | Deployment | Whole session | Mercury-style | 1,100 | 76.27% | 95.48% | 54.51% | 69.40% | 1.717 |
-| Deployment | 5 s window | Mercury-style | 1,100 | 53.00% | 59.56% | 14.92% | 23.86% | 1.768 |
+| Deployment | Complete session, 5 s bins | Mercury-style | 1,100 | 53.00% | 59.56% | 14.92% | 23.86% | 1.768 |
 | Deployment | Whole session | Combined | 1,100 | 79.27% | 96.19% | 60.41% | 74.21% | 1.768 |
-| Deployment | 5 s window | Combined | 1,100 | 52.18% | 55.15% | 16.76% | 25.71% | 1.722 |
+| Deployment | Complete session, 5 s bins | Combined | 1,100 | 52.18% | 55.15% | 16.76% | 25.71% | 1.722 |
 
-The completed four-horizon sweep shows a consistent context-performance
-gradient for GPT-5.4. From whole session to 1 s, balanced F1 decreases by 5.40
-points with minimal features, 16.12 points with Mercury-style features, and
-17.81 points with combined features. The corresponding deployment losses are
-40.73, 46.20, and 48.51 points. The location of the loss differs by feature set:
-Mercury-style and combined deployment F1 have already fallen by 31.30 and 34.21
-points at 30 s, whereas minimal features retain 79.50% at 30 s and 77.66% at 5 s
-before dropping to 49.60% at 1 s.
+The completed four-representation sweep shows a consistent
+serialization-performance gradient for GPT-5.4. From the whole-session
+packet-segment encoding to complete-session 1 s bins, balanced F1 decreases by
+5.40 points with minimal features, 16.12 points with Mercury-style features,
+and 17.81 points with combined features. The corresponding deployment losses
+are 40.73, 46.20, and 48.51 points. The location of the loss differs by feature
+set: Mercury-style and combined deployment F1 have already fallen by 31.30 and
+34.21 points under 30 s binning, whereas minimal features retain 79.50% with
+30 s bins and 77.66% with 5 s bins before dropping to 49.60% with 1 s bins.
+No packets are omitted by these bin-width changes.
 
-The stored whole-session and 5 s confusion matrices expose the error mechanism
-at those horizons. Mercury-style and combined deployment recall falls to 14.92%
-and 16.76% at 5 s, respectively, so their low F1 is driven primarily by missed
-malicious test instances rather than by a precision-only tradeoff. The best
+The stored whole-session and 5 s-bin confusion matrices expose the error
+mechanism for those representations. Mercury-style and combined deployment
+recalls fall to 14.92% and 16.76% at 5 s, respectively, so their low F1 is
+driven primarily by missed malicious test instances rather than by a
+precision-only tradeoff. The best
 whole-session deployment run still has a 10.41% pooled test FPR despite selecting
 thresholds under a 5% validation FPR constraint. This validation-to-test gap
 demonstrates capture-dependent calibration shift; test labels were not used for
-threshold selection. The author-supplied 30 s/1 s records contain F1 only, so
-their error composition cannot be decomposed further from the published data.
+threshold selection. The author-supplied 30 s-bin/1 s-bin records contain F1
+only, so their error composition cannot be decomposed further from the published
+data.
 
-The Phase 4E archive used a different and weaker protocol: 200 balanced
-sessions were sampled without a capture-disjoint train/validation/test boundary,
-and each prompt received the first 5, 10, 20, or 50 packets. It is retained only
-as a historical sensitivity check.
+Phase 4E provides the repository's actual bounded-prefix evidence. It used a
+different and weaker protocol: 200 balanced sessions were sampled without a
+capture-disjoint train/validation/test boundary, and each prompt received only
+the first 5, 10, 20, or 50 packets. It is therefore retained as a preliminary
+prefix-feasibility and prompt-sensitivity check, not as a result that can be
+pooled with Phase 7.
 
-| Phase 4E packet window | Accuracy | Precision | Recall | F1 | Prediction behavior |
+| Phase 4E first-packet prefix | Accuracy | Precision | Recall | F1 | Prediction behavior |
 |---:|---:|---:|---:|---:|---|
 | 5 packets | 96.00% | 92.59% | 100.00% | 96.15% | 8 false positives |
 | 10 packets | 59.50% | 55.25% | 100.00% | 71.17% | 81 false positives |
 | 20 packets | 50.50% | 50.25% | 100.00% | 66.89% | 99 false positives |
 | 50 packets | 50.00% | 50.00% | 100.00% | 66.67% | all samples predicted malicious |
 
-Phase 4E exhibits the opposite ordering from the capture-disjoint time-window
-sweep: the five-packet prompt performs best, while longer packet prefixes
-collapse toward an all-malicious decision. This reversal is consistent with a
-protocol- or prompt-specific failure, not evidence that longer observation is
-intrinsically harmful. The results cannot be merged because their units,
-cohorts, provider metadata, and leakage controls differ. The recovered source,
+Phase 4E exhibits the opposite numeric ordering from the capture-disjoint
+complete-session bin-width sweep: the five-packet prefix performs best, while
+longer packet prefixes collapse toward an all-malicious decision. The 96.15%
+five-packet F1 shows that early-prefix classification can be feasible on this
+sample, but the reversal is consistent with a protocol- or prompt-specific
+failure, not evidence that longer observation is intrinsically harmful. The
+results cannot be merged because their units, cohorts, provider metadata, and
+leakage controls differ. The recovered source,
 `llm_results_openai_verbose.json`, contains no model field; it therefore
 cannot support a Claude Sonnet attribution. Claude Sonnet 4.6 remains executable
 through the current provider path, but no provider-identified Sonnet session
@@ -153,51 +167,53 @@ artifact is claimed here.
 ### Local ML and Ensembles
 
 The local suite evaluates complete held-out folds rather than budgeted subsets.
-Table 2 gives the best model/feature combination at each granularity. Table 3
-reports the corresponding worst combination, selected by pooled malicious F1
-over all five detectors and three feature sets. The three comparison figures
-below expose every individual cell.
+Table 2 gives the best model/feature combination for each complete-session
+representation. Table 3 reports the corresponding worst combination, selected
+by pooled malicious F1 over all five detectors and three feature sets. The three
+comparison figures below expose every individual cell.
 
-| Evaluation | Context | Best detector | Best features | Best accuracy | Best precision | Best recall | Best pooled F1 |
+| Evaluation | Representation | Best detector | Best features | Best accuracy | Best precision | Best recall | Best pooled F1 |
 |---|---|---|---|---:|---:|---:|---:|
 | Balanced | Whole session | CART | Mercury-style | 89.56% | 93.34% | 85.19% | **89.08%** |
-| Balanced | 30 s window | KNN | Combined | 88.95% | 92.63% | 84.63% | 88.45% |
-| Balanced | 5 s window | KNN | Combined | 88.95% | 92.55% | 84.72% | 88.46% |
-| Balanced | 1 s window | CART | Mercury-style | 89.28% | 93.39% | 84.53% | 88.74% |
+| Balanced | Complete session, 30 s bins | KNN | Combined | 88.95% | 92.63% | 84.63% | 88.45% |
+| Balanced | Complete session, 5 s bins | KNN | Combined | 88.95% | 92.55% | 84.72% | 88.46% |
+| Balanced | Complete session, 1 s bins | CART | Mercury-style | 89.28% | 93.39% | 84.53% | 88.74% |
 | Balanced | Packet ablation | RF | Combined | 92.48% | 92.20% | 92.80% | **92.50%** |
 | Deployment | Whole session | RF | Minimal | 83.75% | 92.06% | 75.86% | 83.18% |
-| Deployment | 30 s window | RF | Minimal | 83.67% | 92.40% | 75.35% | 83.01% |
-| Deployment | 5 s window | RF | Minimal | 84.20% | 92.91% | 75.95% | 83.58% |
-| Deployment | 1 s window | CART | Combined | 85.30% | 92.08% | 79.04% | **85.06%** |
+| Deployment | Complete session, 30 s bins | RF | Minimal | 83.67% | 92.40% | 75.35% | 83.01% |
+| Deployment | Complete session, 5 s bins | RF | Minimal | 84.20% | 92.91% | 75.95% | 83.58% |
+| Deployment | Complete session, 1 s bins | CART | Combined | 85.30% | 92.08% | 79.04% | **85.06%** |
 | Deployment | Packet ablation | -- | -- | -- | -- | -- | Unsupported |
 
-| Evaluation | Context | Worst detector | Worst features | Worst accuracy | Worst precision | Worst recall | Worst pooled F1 |
+| Evaluation | Representation | Worst detector | Worst features | Worst accuracy | Worst precision | Worst recall | Worst pooled F1 |
 |---|---|---|---|---:|---:|---:|---:|
 | Balanced | Whole session | CART | Combined | 88.15% | 91.38% | 84.25% | 87.67% |
-| Balanced | 30 s window | CART | Combined | 79.14% | 89.49% | 66.03% | **75.99%** |
-| Balanced | 5 s window | KNN | Minimal | 78.55% | 89.57% | 64.63% | **75.08%** |
-| Balanced | 1 s window | CART | Combined | 79.04% | 89.46% | 65.84% | **75.85%** |
+| Balanced | Complete session, 30 s bins | CART | Combined | 79.14% | 89.49% | 66.03% | **75.99%** |
+| Balanced | Complete session, 5 s bins | KNN | Minimal | 78.55% | 89.57% | 64.63% | **75.08%** |
+| Balanced | Complete session, 1 s bins | CART | Combined | 79.04% | 89.46% | 65.84% | **75.85%** |
 | Balanced | Packet ablation | KNN | Mercury-style | 88.88% | 89.85% | 87.66% | 88.74% |
 | Deployment | Whole session | LightGBM | Mercury-style | 80.05% | 85.28% | 75.32% | 79.99% |
-| Deployment | 30 s window | XGBoost | Mercury-style | 80.00% | 85.37% | 75.10% | 79.91% |
-| Deployment | 5 s window | XGBoost | Mercury-style | 79.95% | 85.25% | 75.13% | 79.87% |
-| Deployment | 1 s window | XGBoost | Mercury-style | 80.02% | 85.35% | 75.17% | 79.93% |
+| Deployment | Complete session, 30 s bins | XGBoost | Mercury-style | 80.00% | 85.37% | 75.10% | 79.91% |
+| Deployment | Complete session, 5 s bins | XGBoost | Mercury-style | 79.95% | 85.25% | 75.13% | 79.87% |
+| Deployment | Complete session, 1 s bins | XGBoost | Mercury-style | 80.02% | 85.35% | 75.17% | 79.93% |
 | Deployment | Packet ablation | -- | -- | -- | -- | -- | Unsupported |
 
 Deployment packet ablation fails closed because fold 0 has only 60 malicious
 validation samples, below the configured minimum support of 100. Reporting no
 score is preferable to thresholding on an underpowered validation set. Across
-the four session/window horizons, RF and XGBoost are nearly invariant to
-granularity: within any feature/evaluation series, their F1 ranges are at most
-0.57 points. Balanced LightGBM spans at most 0.08 points; its largest deployment
-span is 2.17 points for Mercury-style features. This is qualitatively different
-from GPT-5.4's 5.40-48.51 point whole-to-1 s losses. Stability is not universal
-among local learners: balanced KNN falls to 75.08% with minimal 5 s windows,
-while CART falls to approximately 76% for combined 30 s and 1 s windows. These
-are isolated model/context interactions rather than the systematic decline
-observed across every GPT feature set and both evaluation modes.
+the four complete-session representations, RF and XGBoost are nearly invariant
+to serialization granularity: within any feature/evaluation series, their F1
+ranges are at most 0.57 points. Balanced LightGBM spans at most 0.08 points; its
+largest deployment span is 2.17 points for Mercury-style features. This is
+qualitatively different
+from GPT-5.4's 5.40-48.51 point whole-encoding-to-1 s-bin losses. Stability is
+not universal among local learners: balanced KNN falls to 75.08% with minimal
+5 s bins,
+while CART falls to approximately 76% for combined 30 s and 1 s bins. These
+are isolated model/representation interactions rather than the systematic
+decline observed across every GPT feature set and both evaluation modes.
 
-Across the 120 supported local session/window summary cells, throughput derived
+Across the 120 supported local complete-session summary cells, throughput derived
 from recorded test size and prediction time spans approximately 2.5 thousand to
 1.47 million samples/s (median approximately 207 thousand), versus 1.72-1.91
 seconds per remote GPT request. The measurements are not hardware-normalized,
@@ -206,110 +222,171 @@ different latency regime.
 
 ### Cross-Model Comparison
 
-The following figures order nominal temporal scope from largest to smallest on
-the x-axis. Window duration is not a packet-count guarantee because traffic
-intensity varies across sessions. Every cell reports malicious-class F1. Local
-values and GPT-5.4 whole/5 s values are recomputed from stored confusion counts;
-asterisked GPT-5.4 30 s/1 s values are additional measurements supplied by the
-project author. Their raw predictions, confusion counts, class supports, and
-latencies are not present in this repository, so those cells cannot be
+The following figures compare the whole-session packet-segment encoding with
+complete-session 30 s, 5 s, and 1 s binning. They do not order the amount of
+traffic observed: every `behavior_window` sample still contains its complete
+eligible session. Every cell reports malicious-class F1. Local values and
+GPT-5.4 whole/5 s-bin values are recomputed from stored confusion counts;
+asterisked GPT-5.4 30 s-bin/1 s-bin values are additional measurements supplied
+by the project author. Their raw predictions, confusion counts, class supports,
+and latencies are not present in this repository, so those cells cannot be
 independently recomputed and are not used in the detailed LLM table above.
 
-The descriptive best-feature envelope changes sharply with context. In balanced
-evaluation, the best GPT/local F1 values are 84.41/89.08% for whole sessions,
-75.10/88.45% at 30 s, 70.61/88.46% at 5 s, and 66.60/88.74% at 1 s. In
-deployment evaluation they are 90.33/83.18%, 79.50/83.01%, 77.66/83.58%, and
+The descriptive best-feature envelope changes sharply with serialization. In
+balanced evaluation, the best GPT/local F1 values are 84.41/89.08% for the
+packet-segment whole-session representation, 75.10/88.45% with 30 s bins,
+70.61/88.46% with 5 s bins, and 66.60/88.74% with 1 s bins. In deployment
+evaluation they are 90.33/83.18%, 79.50/83.01%, 77.66/83.58%, and
 49.60/85.06%, respectively. GPT therefore leads the best local baseline only in
-the whole-session deployment comparison, by 7.15 points; by 1 s, the best local
-result leads GPT by 22.14 points in balanced evaluation and 35.46 points in
-deployment evaluation. These post hoc envelopes summarize the observed result
-matrix and are not a feature-selection procedure.
+the whole-session deployment comparison, by 7.15 points; under 1 s binning, the
+best local result leads GPT by 22.14 points in balanced evaluation and 35.46
+points in deployment evaluation. These post hoc envelopes summarize the
+observed result matrix and are not a feature-selection procedure.
 
-#### LLM Degradation Across Windows
+#### LLM Sensitivity to Full-Session Binning
 
-![GPT-5.4 F1 degradation across decreasing session context](figures/session_llm_context_degradation.png)
+![GPT-5.4 F1 across complete-session encodings](figures/session_llm_context_degradation.png)
 
 [Vector PDF](figures/session_llm_context_degradation.pdf). The figure isolates
 the three GPT-5.4 feature trajectories. In balanced evaluation, minimal-feature
-F1 is nearly flat from the whole session through 5 s (61.00% to 59.95%) before
-falling to 55.60% at 1 s. Mercury-style and combined features degrade at every
-reduction in scope, losing 16.12 and 17.81 points from whole session to 1 s.
-Thus, richer metadata improves GPT at large horizons but also makes performance
-more dependent on retaining session-level context.
+F1 is nearly flat from packet-segment encoding through 5 s binning (61.00% to
+59.95%) before falling to 55.60% with 1 s bins. Mercury-style and combined
+features degrade under each finer serialization, losing 16.12 and 17.81 points
+from packet segments to 1 s bins. Richer metadata therefore improves GPT under
+the packet-segment representation but is more sensitive to how the same session
+is serialized; this experiment does not remove later traffic.
 
 Deployment evaluation shows two distinct failure shapes. Mercury-style and
-combined F1 collapse immediately at 30 s, from 69.40% to 38.10% and from 74.21%
-to 40.00%, then approach approximately 24-26% by 5 s. Minimal features retain
-79.50% at 30 s and 77.66% at 5 s, but fall to 49.60% at 1 s. Across all three
-feature sets, the whole session is the best horizon and 1 s is the worst; the
-whole-to-1 s deployment losses are 40.73, 46.20, and 48.51 points for minimal,
-Mercury-style, and combined inputs. The connecting lines show ordering across
-the four evaluated categorical horizons and do not estimate untested durations.
+combined F1 collapse with 30 s bins, from 69.40% to 38.10% and from 74.21% to
+40.00%, then approach approximately 24-26% with 5 s bins. Minimal features
+retain 79.50% with 30 s bins and 77.66% with 5 s bins, but fall to 49.60% with
+1 s bins. Across all three feature sets, packet-segment encoding is best and
+1 s binning is worst; the corresponding deployment losses are 40.73, 46.20,
+and 48.51 points. The connecting lines order four categorical encodings and do
+not estimate performance at untested bin widths or capture prefixes.
 
 #### Minimal Features
 
-![Minimal-feature F1 by detector and context](figures/session_granularity_minimal.png)
+![Minimal-feature F1 by detector and full-session representation](figures/session_granularity_minimal.png)
 
 [Vector PDF](figures/session_granularity_minimal.pdf). Minimal metadata is the
-least context-sensitive balanced GPT configuration: F1 remains within 1.05
-points of the whole-session result through 5 s, then loses a further 4.35 points
-at 1 s. Deployment behavior is nonlinear. F1 declines from 90.33% to 79.50% at
-30 s and 77.66% at 5 s, followed by a 28.06-point 5-to-1 s collapse. RF,
-XGBoost, and LightGBM do not reproduce that collapse; balanced KNN at 5 s is the
-principal local exception.
+least serialization-sensitive balanced GPT configuration: F1 remains within
+1.05 points of the packet-segment result through 5 s binning, then loses a
+further 4.35 points with 1 s bins. Deployment behavior is nonlinear. F1 declines
+from 90.33% to 79.50% with 30 s bins and 77.66% with 5 s bins, followed by a
+28.06-point 5-to-1 s-bin collapse. RF, XGBoost, and LightGBM do not reproduce
+that collapse; balanced KNN with 5 s bins is the principal local exception.
 
 #### Mercury-Style Features
 
-![Mercury-style F1 by detector and context](figures/session_granularity_mercury.png)
+![Mercury-style F1 by detector and full-session representation](figures/session_granularity_mercury.png)
 
-[Vector PDF](figures/session_granularity_mercury.pdf). Mercury-style context
-improves balanced whole-session GPT F1 by 15.72 points over minimal metadata,
-but that advantage contracts to 5.00 points at 1 s. Deployment performance is
-substantially more brittle: F1 loses 31.30 points by 30 s, 45.54 points by 5 s,
-and 46.20 points by 1 s. The near-plateau between 5 s and 1 s (23.86% versus
-23.20%) indicates that most of the failure has already occurred by the 5 s
-horizon. Local Mercury-style results remain near 80-89% across all horizons.
+[Vector PDF](figures/session_granularity_mercury.pdf). Mercury-style metadata
+improves balanced packet-segment GPT F1 by 15.72 points over minimal metadata,
+but that advantage contracts to 5.00 points with 1 s bins. Deployment
+performance is substantially more brittle: F1 loses 31.30 points with 30 s
+bins, 45.54 points with 5 s bins, and 46.20 points with 1 s bins. The near
+plateau between 5 s and 1 s (23.86% versus 23.20%) indicates that most of the
+representation-associated failure has already occurred with 5 s binning. Local
+Mercury-style results remain near 80-89% across all four representations.
 
 #### Combined Features
 
-![Combined-feature F1 by detector and context](figures/session_granularity_combined.png)
+![Combined-feature F1 by detector and full-session representation](figures/session_granularity_combined.png)
 
 [Vector PDF](figures/session_granularity_combined.pdf). Combining both feature
-families produces the strongest balanced GPT result at every horizon, but its
-advantage over the other GPT feature sets does not make it context invariant:
-F1 loses 9.31 points by 30 s and 17.81 points by 1 s. Under deployment
-prevalence, combined features lose 34.21 points by 30 s and produce nearly the
-same low F1 at 5 s and 1 s (25.71% and 25.70%). RF/XGBoost/LightGBM remain close to
-their whole-session scores. CART's isolated balanced failures at 30 s and 1 s
-show why model-specific cells must remain visible instead of reporting only the
-best local detector.
+families produces the strongest balanced GPT result under every representation,
+but its advantage over the other GPT feature sets does not make it
+serialization invariant: F1 loses 9.31 points with 30 s bins and 17.81 points
+with 1 s bins. Under deployment prevalence, combined features lose 34.21 points
+with 30 s bins and produce nearly the same low F1 with 5 s and 1 s bins (25.71%
+and 25.70%). RF, XGBoost, and LightGBM remain close to their packet-segment
+scores. CART's isolated balanced failures with 30 s and 1 s bins show why
+model-specific cells must remain visible instead of reporting only the best
+local detector.
 
-The completed sweep establishes that GPT-5.4 is context sensitive under this
-prompted representation: all six feature/evaluation trajectories attain their
-highest F1 on whole sessions and their lowest F1 at 1 s (the combined deployment
-5 s and 1 s values are tied to one decimal place). The detector-by-horizon
-interaction is not an inevitable consequence of shorter windows because the
-tree ensembles remain nearly flat on the same split manifests. The pattern is
-consistent with loss of long-range direction changes, packet-size transitions,
-periodicity, and repeated service behavior, compounded by threshold transfer
-across captures. It may also reflect the training asymmetry: local models are
-fitted directly to all eligible window profiles, whereas GPT receives a
-budgeted memory prompt rather than window-specific supervised optimization.
-These mechanisms are not separately identified by the experiment, but the
-practical result within this matrix is clear: reducing temporal scope
-systematically harms the prompted detector and can erase its whole-session
-deployment advantage.
+The completed sweep establishes that GPT-5.4 is sensitive to full-session
+serialization: all six feature/evaluation trajectories attain their highest F1
+under packet-segment encoding and their lowest F1 under 1 s binning (the
+combined deployment 5 s and 1 s values are tied to one decimal place). Because
+every representation retains the complete session, this pattern cannot be
+attributed to omitted long-range events. Plausible mechanisms include increased
+feature repetition under finer bins, compression of long sessions into the
+32-summary cap, distribution shift between memory examples and test prompts,
+and cross-capture threshold transfer. The training asymmetry may also matter:
+local models are fitted directly to all eligible profile vectors, whereas GPT
+receives a budgeted memory prompt rather than representation-specific supervised
+optimization. These mechanisms are not separately identified by the experiment.
+
+### Production Input Requirements and Prefix Evidence
+
+![Projected prefix input growth and Phase 4E first-packet results](figures/session_production_input_tradeoff.png)
+
+[Vector PDF](figures/session_production_input_tradeoff.pdf). The left panel is a
+data-volume projection over the frozen 6,000-session deployment cohort, not an
+accuracy experiment. It truncates each packet stream at 1 s, 5 s, and 30 s and
+then applies the current ordered packet-segment serializer. The right panel
+shows Phase 4E's actual first-5/10/20/50-packet measurements under its separate,
+weaker protocol. The panels are deliberately not pooled.
+
+| Hypothetical decision point | Mean packets observed | Mean wire KiB observed | Minimal values | Mercury values | Combined values |
+|---|---:|---:|---:|---:|---:|
+| First 1 s | 16.01 | 2.39 | 25.94 | 75.11 | 91.50 |
+| First 5 s | 28.85 | 3.74 | 32.47 | 95.61 | 116.65 |
+| First 30 s | 37.58 | 4.99 | 35.75 | 105.92 | 129.32 |
+| Completed session | 84.42 | 12.24 | 40.89 | 124.24 | 152.02 |
+
+The prefix projection supports a narrow production argument: closing a decision
+after a bounded prefix can reduce decision delay, flow-state lifetime, and the
+metadata summarized before classification. In this cohort, a first-1 s policy
+observes 16.01 packets and 2.39 KiB per session on average, versus 84.42 packets
+and 12.24 KiB for completed sessions. The projected scalar metadata also grows
+monotonically from 25.94/75.11/91.50 values at 1 s to
+40.89/124.24/152.02 values at completion for minimal/Mercury/combined inputs.
+These counts exclude JSON syntax, feature names, system instructions, memory
+examples, and generated output.
+
+It does not follow that the existing Phase 7 1 s/5 s/30 s F1 values quantify
+that tradeoff. The audited eligible deployment cohorts for all four Phase 7
+representations are constructed from the same 6,000 sessions, 506,505 packet
+rows, and 75,214,748 observed wire bytes; the budgeted GPT experiments evaluate
+frozen subsets of that cohort. Finer binning can even increase prompt structure:
+mean reported summaries rise from 2.78 for packet segments to 4.99 for 1 s bins.
+In the available whole-versus-5 s API records, mean total tokens range from a
+4.7% decrease to an 8.4% increase, depending on feature set and evaluation mode;
+5 s binning is not a reliable input-cost reduction.
+
+Phase 4E does measure bounded packet prefixes, but it is preliminary evidence.
+Its five-packet F1 is 96.15%; by 50 packets, F1 is 66.67% because every sample is
+predicted malicious. The missing model identity, balanced 200-session sample,
+absence of capture-disjoint folds, and lack of validation-only thresholding
+preclude a production-accuracy claim. A publishable early-detector comparison
+requires frozen capture-disjoint first-1 s/5 s/30 s prefixes, balanced and
+prevalence-faithful tests, validation-only thresholds, and one final test
+evaluation. It must retain sessions with sparse prefixes or specify an
+abstention policy rather than silently filtering them after observing the label.
+
+The cohort also does not justify a broad claim that completed-session detection
+is infeasible on gigabit enterprise networks. A metadata-only sensor need not
+retain packet payloads, and the median completed session here is only 18 packets
+and 1,486 observed bytes. The long tail is material, however: the largest
+session has 86,157 packets and 18,620,487 observed bytes. Whole-session
+deployment therefore raises real latency and concurrent-flow-state concerns,
+but enterprise arrival rate, flow concurrency, memory footprint, and sustained
+throughput were not measured. Those systems quantities, rather than aggregate
+link bandwidth alone, are required for a defensible scalability claim.
 
 Important scope limits remain. The corpus contains seven benign and five
-malicious captures, with one malicious capture per evaluated family. Sessions
-and windows require at least six packets. Local and LLM inputs share base
+malicious captures, with one malicious capture per evaluated family. Every
+complete-session representation requires at least six packets per session.
+Local and LLM inputs share base
 metadata and split manifests, but their tabular and textual representations are
 not byte-identical. Local models use full folds, whereas GPT uses frozen budgeted
 subsets. Blind prompting, Sonnet 4.6, and fine-tuning paths exist in code but are
 not represented by completed capture-disjoint artifacts in these tables.
 
 See [`results/published/README.md`](results/published/README.md) for fold-level
-records, provenance, and source-artifact hashes. Regenerate the four figures
+records, provenance, and source-artifact hashes. Regenerate the five figures
 with `python scripts/create_session_granularity_chart.py`.
 
 ## Installation
