@@ -26,12 +26,13 @@ three observation units, two evaluation modes, and several detector families.
 | Primary split | `capture_disjoint_5fold` |
 | Secondary split | `within_capture_temporal` seen-capture upper bound |
 
-`packet_ablation` is retained only to compare against the original packet-level
-design. Whole sessions and behavior windows are the primary deployment units.
+`packet_ablation` is retained only to compare against simpler packet-level
+experiments. Whole sessions and behavior windows are the primary deployment
+units.
 
 ### Feature Sets
 
-`minimal` contains the original five side-channel fields: packet size, payload
+`minimal` contains five side-channel fields: packet size, payload
 size, payload ratio, size ratio to the preceding packet, and inter-arrival time.
 
 `mercury` contains 20 efficiently derived Mercury-style metadata fields:
@@ -49,7 +50,9 @@ Mercury-style fields.
 
 `balanced` creates an equal benign/malicious held-out cohort in each frozen fold
 and evaluates the fixed decision threshold. It is intended for controlled,
-apples-to-apples scientific comparisons.
+apples-to-apples scientific comparisons. The exact evaluated class composition
+is shown below; counts are per feature/context variant and are not multiplied by
+the number of detectors.
 
 `deployment` retains the class prevalence in the eligible held-out capture
 cohort. A threshold is selected **only on the validation partition** by
@@ -57,6 +60,21 @@ maximizing recall subject to the configured validation false-positive-rate
 ceiling, then applied once to the test partition. This is prevalence faithful to
 the study corpus, not to an enterprise network; the corpus itself is much more
 malware dense than operational traffic.
+
+| Mode and test path | Benign test samples | Malicious test samples | Total |
+|---|---:|---:|---:|
+| Balanced, local whole session or time window | 2,140 (50.00%) | 2,140 (50.00%) | 4,280 |
+| Balanced, local packet ablation | 1,070 (50.00%) | 1,070 (50.00%) | 2,140 |
+| Balanced, expanded GPT variant | 260 (50.00%) | 260 (50.00%) | 520 |
+| Deployment, local whole session or time window | 2,823 (47.05%) | 3,177 (52.95%) | 6,000 |
+| Deployment, expanded GPT variant | 557 (50.64%) | 543 (49.36%) | 1,100 |
+
+The complete deployment folds are highly heterogeneous: their malicious rates
+are 30.69%, 29.22%, 74.79%, 44.29%, and 74.85% for the five held-out captures.
+The budgeted GPT test subset preserves this fold-level imbalance approximately,
+but its fixed 220 decisions per fold produce a slightly lower pooled rate of
+49.36% malicious. Deployment packet ablation is not reported because one
+validation fold fails the minimum class-support requirement.
 
 ## Current Audited Results
 
@@ -100,20 +118,20 @@ recall collapse: Mercury-style and combined 5 s recall falls to 14.92% and
 constraint. The discrepancy demonstrates capture shift between validation and
 test; it does not imply that test labels influenced threshold selection.
 
-The legacy Phase 4E archive used a different and weaker protocol: 200 balanced
+The Phase 4E archive used a different and weaker protocol: 200 balanced
 sessions were sampled without a capture-disjoint train/validation/test boundary,
 and each prompt received the first 5, 10, 20, or 50 packets. It is retained only
 as a historical sensitivity check.
 
-| Legacy packet window | Accuracy | Precision | Recall | F1 | Prediction behavior |
+| Phase 4E packet window | Accuracy | Precision | Recall | F1 | Prediction behavior |
 |---:|---:|---:|---:|---:|---|
 | 5 packets | 96.00% | 92.59% | 100.00% | 96.15% | 8 false positives |
 | 10 packets | 59.50% | 55.25% | 100.00% | 71.17% | 81 false positives |
 | 20 packets | 50.50% | 50.25% | 100.00% | 66.89% | 99 false positives |
 | 50 packets | 50.00% | 50.00% | 100.00% | 66.67% | all samples predicted malicious |
 
-These legacy results do not establish that less context is harmful: the
-five-packet prompt was the best legacy setting, while longer prompts collapsed
+These Phase 4E results do not establish that less context is harmful: the
+five-packet prompt was the best Phase 4E setting, while longer prompts collapsed
 toward an all-malicious decision. They cannot be merged with the redesigned
 time-window results because the units, cohorts, provider metadata, and leakage
 controls differ. The recovered source is named
@@ -125,11 +143,12 @@ artifact is claimed here.
 ### Local ML and Ensembles
 
 The local suite evaluates complete held-out folds rather than budgeted subsets.
-Table 2 gives the best model/feature combination at each granularity; the three
-comparison figures below expose all five algorithms and all three feature sets,
-including non-winning cells.
+Table 2 gives the best model/feature combination at each granularity. Table 3
+reports the corresponding worst combination, selected by pooled malicious F1
+over all five detectors and three feature sets. The three comparison figures
+below expose every individual cell.
 
-| Evaluation | Context | Best detector | Features | Accuracy | Precision | Recall | Pooled F1 |
+| Evaluation | Context | Best detector | Best features | Best accuracy | Best precision | Best recall | Best pooled F1 |
 |---|---|---|---|---:|---:|---:|---:|
 | Balanced | Whole session | CART | Mercury-style | 89.56% | 93.34% | 85.19% | **89.08%** |
 | Balanced | 30 s window | KNN | Combined | 88.95% | 92.63% | 84.63% | 88.45% |
@@ -140,6 +159,19 @@ including non-winning cells.
 | Deployment | 30 s window | RF | Minimal | 83.67% | 92.40% | 75.35% | 83.01% |
 | Deployment | 5 s window | RF | Minimal | 84.20% | 92.91% | 75.95% | 83.58% |
 | Deployment | 1 s window | CART | Combined | 85.30% | 92.08% | 79.04% | **85.06%** |
+| Deployment | Packet ablation | -- | -- | -- | -- | -- | Unsupported |
+
+| Evaluation | Context | Worst detector | Worst features | Worst accuracy | Worst precision | Worst recall | Worst pooled F1 |
+|---|---|---|---|---:|---:|---:|---:|
+| Balanced | Whole session | CART | Combined | 88.15% | 91.38% | 84.25% | 87.67% |
+| Balanced | 30 s window | CART | Combined | 79.14% | 89.49% | 66.03% | **75.99%** |
+| Balanced | 5 s window | KNN | Minimal | 78.55% | 89.57% | 64.63% | **75.08%** |
+| Balanced | 1 s window | CART | Combined | 79.04% | 89.46% | 65.84% | **75.85%** |
+| Balanced | Packet ablation | KNN | Mercury-style | 88.88% | 89.85% | 87.66% | 88.74% |
+| Deployment | Whole session | LightGBM | Mercury-style | 80.05% | 85.28% | 75.32% | 79.99% |
+| Deployment | 30 s window | XGBoost | Mercury-style | 80.00% | 85.37% | 75.10% | 79.91% |
+| Deployment | 5 s window | XGBoost | Mercury-style | 79.95% | 85.25% | 75.13% | 79.87% |
+| Deployment | 1 s window | XGBoost | Mercury-style | 80.02% | 85.35% | 75.17% | 79.93% |
 | Deployment | Packet ablation | -- | -- | -- | -- | -- | Unsupported |
 
 Deployment packet ablation fails closed because fold 0 has only 60 malicious
@@ -164,29 +196,33 @@ different latency regime.
 
 The following figures order nominal temporal scope from largest to smallest on
 the x-axis. Window duration is not a packet-count guarantee because traffic
-intensity varies across sessions. Every cell reports pooled malicious F1; GPT
-grey cells denote experiments that were not executed. In particular, GPT-5.4
-was evaluated for whole sessions and 5 s windows only. The figures therefore
-establish a whole-to-5 s loss but do not justify interpolation or a monotonic
-claim at 30 s or 1 s.
+intensity varies across sessions. Every cell reports malicious-class F1. Local
+values and GPT-5.4 whole/5 s values are recomputed from stored confusion counts;
+asterisked GPT-5.4 30 s/1 s values are additional measurements supplied by the
+project author. Their raw predictions, confusion counts, class supports, and
+latencies are not present in this repository, so those cells cannot be
+independently recomputed and are not used in the detailed LLM table above.
 
 #### Minimal Features
 
 ![Minimal-feature F1 by detector and context](figures/session_granularity_minimal.png)
 
 [Vector PDF](figures/session_granularity_minimal.pdf). Minimal metadata is the
-least sensitive balanced GPT configuration (61.00% to 59.95% F1), but deployment
-F1 still falls from 90.33% to 77.66%. The local ensembles remain stable; the main
-counterexample is balanced KNN at 5 s.
+least sensitive balanced GPT configuration, declining from 61.00% for the whole
+session to 60.40%, 59.95%, and 55.60% at 30 s, 5 s, and 1 s. Deployment declines
+more sharply from 90.33% to 79.50%, 77.66%, and 49.60%. The local ensembles
+remain stable; the main counterexample is balanced KNN at 5 s.
 
 #### Mercury-Style Features
 
 ![Mercury-style F1 by detector and context](figures/session_granularity_mercury.png)
 
 [Vector PDF](figures/session_granularity_mercury.pdf). Mercury-style context
-raises whole-session GPT F1 over minimal features in balanced evaluation, but its
-5 s deployment representation is brittle: F1 drops from 69.40% to 23.86%. Local
-models remain tightly clustered, with no analogous systematic collapse.
+raises whole-session GPT F1 over minimal features in balanced evaluation, then
+falls from 76.72% to 68.90%, 63.11%, and 60.60% as the horizon contracts. Its
+deployment representation is substantially more brittle: F1 falls from 69.40%
+to 38.10%, 23.86%, and 23.20%. Local models remain tightly clustered, with no
+analogous systematic collapse.
 
 #### Combined Features
 
@@ -194,7 +230,8 @@ models remain tightly clustered, with no analogous systematic collapse.
 
 [Vector PDF](figures/session_granularity_combined.pdf). Combining both feature
 families produces the strongest balanced whole-session GPT result (84.41%) but
-does not protect against truncation. Deployment F1 falls from 74.21% to 25.71%,
+does not protect against truncation: balanced F1 decreases to 75.10%, 70.61%,
+and 66.60%. Deployment F1 falls from 74.21% to 40.00%, 25.71%, and 25.70%,
 whereas RF/XGBoost/LightGBM remain near their whole-session scores. CART's
 isolated 30 s and 1 s balanced failures show why model-specific cells must remain
 visible rather than reporting only the best local detector.
@@ -207,8 +244,9 @@ of labeled memory examples and is not optimized on every training window; the
 local models are fitted directly to all eligible supervised window profiles.
 Short windows also shift score distributions across captures, weakening a
 validation-selected threshold. These are evidence-consistent explanations, not
-causal conclusions: a dedicated multi-window LLM sweep at 30 s and 1 s is needed
-to isolate information loss from prompt representation and threshold transfer.
+causal conclusions. The supplemental 30 s/1 s points strengthen the observed
+degradation pattern, but their prediction-level artifacts are still needed to
+separate information loss from prompt representation and threshold transfer.
 
 Important scope limits remain. The corpus contains seven benign and five
 malicious captures, with one malicious capture per evaluated family. Sessions
@@ -367,7 +405,7 @@ exported training corpus.
 
 ## Earlier Phases
 
-Phases 2-6 remain available for reproducing the original packet-centric and
+Phases 2-6 remain available for reproducing the simpler packet-level and
 adversarial ablations:
 
 ```text

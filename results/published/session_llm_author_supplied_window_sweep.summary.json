@@ -1,0 +1,125 @@
+{
+  "schema_version": "publication_author_supplied_f1_v1",
+  "provenance": {
+    "source": "Values supplied by the project author on 2026-07-23",
+    "raw_artifact_available": false,
+    "confusion_counts_available": false,
+    "sample_support_available": false,
+    "verification_status": "f1_values_not_independently_recomputed"
+  },
+  "metric": {
+    "name": "malicious_class_f1",
+    "scale_in_source_message": "percentage",
+    "stored_scale": "fraction"
+  },
+  "records": [
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "minimal",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.604
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "minimal",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.556
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "minimal",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.795
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "minimal",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.496
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "mercury",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.689
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "mercury",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.606
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "mercury",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.381
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "mercury",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.232
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "combined",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.751
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "balanced",
+      "feature_set": "combined",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.666
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "combined",
+      "sample_unit": "behavior_window",
+      "window_seconds": 30.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.400
+    },
+    {
+      "record_type": "author_supplied_f1",
+      "evaluation_mode": "deployment",
+      "feature_set": "combined",
+      "sample_unit": "behavior_window",
+      "window_seconds": 1.0,
+      "model": "GPT-5.4",
+      "reported_f1_1": 0.257
+    }
+  ]
+}

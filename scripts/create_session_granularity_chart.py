@@ -33,6 +33,9 @@ LLM_FILES = {
     / f"session_llm_capture_disjoint_5fold_{mode}_expanded_openai_memory.summary.json"
     for mode in MODES
 }
+LLM_SUPPLEMENTAL_FILE = (
+    PUBLISHED / "session_llm_author_supplied_window_sweep.summary.json"
+)
 
 
 def _records(path: Path) -> list[dict]:
@@ -61,6 +64,17 @@ def _pooled_f1(rows: list[dict]) -> float:
     if denominator == 0:
         raise ValueError("Cannot compute pooled F1 from an empty confusion matrix")
     return (2 * tp) / denominator
+
+
+def _cell_label(detector: str, granularity: str, value: float) -> str:
+    if np.isnan(value):
+        return "not run"
+    suffix = (
+        "*"
+        if detector == "GPT-5.4" and granularity in ("30 s", "1 s")
+        else ""
+    )
+    return f"{100 * value:.1f}{suffix}"
 
 
 def collect_values() -> dict[tuple[str, str, str, str], float]:
@@ -99,6 +113,30 @@ def collect_values() -> dict[tuple[str, str, str, str], float]:
                 )
             values[(mode, feature, "GPT-5.4", granularity)] = _pooled_f1(rows)
 
+    supplemental_records = _records(LLM_SUPPLEMENTAL_FILE)
+    for row in supplemental_records:
+        if row.get("record_type") != "author_supplied_f1":
+            raise ValueError("Unexpected supplemental GPT record type")
+        mode = str(row.get("evaluation_mode"))
+        feature = str(row.get("feature_set"))
+        granularity = _granularity(row)
+        model = str(row.get("model"))
+        value = float(row["reported_f1_1"])
+        key = (mode, feature, model, granularity)
+        if (
+            mode not in MODES
+            or feature not in FEATURES
+            or model != "GPT-5.4"
+            or granularity not in ("30 s", "1 s")
+            or not 0.0 <= value <= 1.0
+        ):
+            raise ValueError(f"Invalid supplemental GPT record: {row}")
+        if key in values:
+            raise ValueError(
+                f"Supplemental GPT record duplicates archived result: {key}"
+            )
+        values[key] = value
+
     expected_local = {
         (mode, feature, detector, granularity)
         for mode in MODES
@@ -114,7 +152,7 @@ def collect_values() -> dict[tuple[str, str, str, str], float]:
         (mode, feature, "GPT-5.4", granularity)
         for mode in MODES
         for feature in FEATURES
-        for granularity in ("Whole", "5 s")
+        for granularity in GRANULARITIES
     }
     missing_llm = sorted(expected_llm - values.keys())
     if missing_llm:
@@ -154,8 +192,10 @@ def render_feature(
         image = ax.imshow(matrix, cmap=cmap, vmin=0.20, vmax=0.95, aspect="auto")
         for detector_index in range(len(DETECTORS)):
             for granularity_index in range(len(GRANULARITIES)):
+                detector = DETECTORS[detector_index]
+                granularity = GRANULARITIES[granularity_index]
                 value = matrix[detector_index, granularity_index]
-                label = "not run" if np.isnan(value) else f"{100 * value:.1f}"
+                label = _cell_label(detector, granularity, value)
                 color = "#5b5852" if np.isnan(value) else (
                     "white" if value < 0.38 or value > 0.86 else "#1e2927"
                 )
@@ -195,7 +235,8 @@ def render_feature(
     fig.text(
         0.5,
         1.075,
-        "Pooled confusion-count F1 (%). Window duration decreases left to right; grey GPT cells were not executed.",
+        "Malicious-class F1 (%). Whole/5 s values use stored confusion counts; "
+        "*30/1 s GPT values are author-supplied F1-only results.",
         ha="center",
         fontsize=9.5,
         color="#4b4a46",

@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from scripts.create_session_granularity_chart import collect_values
+from scripts.create_session_granularity_chart import _cell_label, collect_values
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,9 +14,29 @@ class PublicationArtifactTests(unittest.TestCase):
         local = [key for key in values if key[2] != "GPT-5.4"]
         llm = [key for key in values if key[2] == "GPT-5.4"]
         self.assertEqual(len(local), 120)
-        self.assertEqual(len(llm), 12)
-        self.assertNotIn(("balanced", "combined", "GPT-5.4", "30 s"), values)
-        self.assertNotIn(("deployment", "minimal", "GPT-5.4", "1 s"), values)
+        self.assertEqual(len(llm), 24)
+
+    def test_author_supplied_gpt_window_values_are_loaded_exactly(self):
+        values = collect_values()
+        expected = {
+            ("balanced", "minimal", "GPT-5.4", "30 s"): 0.604,
+            ("balanced", "minimal", "GPT-5.4", "1 s"): 0.556,
+            ("deployment", "minimal", "GPT-5.4", "30 s"): 0.795,
+            ("deployment", "minimal", "GPT-5.4", "1 s"): 0.496,
+            ("balanced", "mercury", "GPT-5.4", "30 s"): 0.689,
+            ("balanced", "mercury", "GPT-5.4", "1 s"): 0.606,
+            ("deployment", "mercury", "GPT-5.4", "30 s"): 0.381,
+            ("deployment", "mercury", "GPT-5.4", "1 s"): 0.232,
+            ("balanced", "combined", "GPT-5.4", "30 s"): 0.751,
+            ("balanced", "combined", "GPT-5.4", "1 s"): 0.666,
+            ("deployment", "combined", "GPT-5.4", "30 s"): 0.400,
+            ("deployment", "combined", "GPT-5.4", "1 s"): 0.257,
+        }
+        for key, value in expected.items():
+            self.assertAlmostEqual(values[key], value)
+        self.assertEqual(_cell_label("GPT-5.4", "30 s", 0.604), "60.4*")
+        self.assertEqual(_cell_label("GPT-5.4", "1 s", 0.556), "55.6*")
+        self.assertEqual(_cell_label("GPT-5.4", "5 s", 0.5995), "60.0")
 
     def test_reported_gpt_context_losses_match_published_counts(self):
         values = collect_values()
@@ -52,6 +72,21 @@ class PublicationArtifactTests(unittest.TestCase):
         for key, value in expected.items():
             self.assertAlmostEqual(values[key], value)
 
+    def test_reported_local_worst_cells_match_published_summaries(self):
+        values = collect_values()
+        expected = {
+            ("balanced", "combined", "CART", "Whole"): 0.8767323121808899,
+            ("balanced", "combined", "CART", "30 s"): 0.7598816886259747,
+            ("balanced", "minimal", "KNN", "5 s"): 0.750814332247557,
+            ("balanced", "combined", "CART", "1 s"): 0.7585464333781965,
+            ("deployment", "mercury", "LGBM", "Whole"): 0.7999331439077386,
+            ("deployment", "mercury", "XGB", "30 s"): 0.7990622906898861,
+            ("deployment", "mercury", "XGB", "5 s"): 0.7987284590931906,
+            ("deployment", "mercury", "XGB", "1 s"): 0.7993305439330544,
+        }
+        for key, value in expected.items():
+            self.assertAlmostEqual(values[key], value)
+
     def test_readme_comparison_figures_exist(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         for feature in ("minimal", "mercury", "combined"):
@@ -59,12 +94,12 @@ class PublicationArtifactTests(unittest.TestCase):
             self.assertIn(relative, readme)
             self.assertTrue((ROOT / relative).is_file())
 
-    def test_legacy_metrics_recompute_from_confusion_counts(self):
+    def test_phase4e_metrics_recompute_from_confusion_counts(self):
         path = (
             ROOT
             / "results"
             / "published"
-            / "legacy_phase4e_openai_session_windows.summary.json"
+            / "phase4e_openai_session_windows.summary.json"
         )
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["model"], "not_recorded_in_source_rows")
@@ -79,6 +114,18 @@ class PublicationArtifactTests(unittest.TestCase):
             self.assertAlmostEqual(
                 row["f1_1"], (2 * tp) / ((2 * tp) + fp + fn)
             )
+
+    def test_publication_docs_use_phase4e_label(self):
+        text = "\n".join(
+            [
+                (ROOT / "README.md").read_text(encoding="utf-8"),
+                (ROOT / "results" / "published" / "README.md").read_text(
+                    encoding="utf-8"
+                ),
+            ]
+        )
+        self.assertIn("The Phase 4E archive", text)
+        self.assertIn("phase4e_openai_session_windows", text)
 
 
 if __name__ == "__main__":

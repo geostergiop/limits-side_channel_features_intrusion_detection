@@ -1,5 +1,5 @@
 {
-  "schema_version": "legacy_publication_summary_v1",
+  "schema_version": "phase4e_publication_summary_v1",
   "provenance": {
     "source_commit": "93208e275b628d72ea3c7d143289e0ca0a2bbe69",
     "source_artifact": "llm_results_openai_verbose.json",
@@ -10,7 +10,7 @@
   "provider": "openai_inferred_from_source_filename",
   "model": "not_recorded_in_source_rows",
   "protocol": {
-    "name": "legacy_phase4e_fixed_balanced_session_cohort",
+    "name": "phase4e_fixed_balanced_session_cohort",
     "capture_disjoint": false,
     "validation_partition": false,
     "samples_per_window": 200,
