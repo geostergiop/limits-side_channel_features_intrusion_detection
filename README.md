@@ -225,6 +225,27 @@ result leads GPT by 22.14 points in balanced evaluation and 35.46 points in
 deployment evaluation. These post hoc envelopes summarize the observed result
 matrix and are not a feature-selection procedure.
 
+#### LLM Degradation Across Windows
+
+![GPT-5.4 F1 degradation across decreasing session context](figures/session_llm_context_degradation.png)
+
+[Vector PDF](figures/session_llm_context_degradation.pdf). The figure isolates
+the three GPT-5.4 feature trajectories. In balanced evaluation, minimal-feature
+F1 is nearly flat from the whole session through 5 s (61.00% to 59.95%) before
+falling to 55.60% at 1 s. Mercury-style and combined features degrade at every
+reduction in scope, losing 16.12 and 17.81 points from whole session to 1 s.
+Thus, richer metadata improves GPT at large horizons but also makes performance
+more dependent on retaining session-level context.
+
+Deployment evaluation shows two distinct failure shapes. Mercury-style and
+combined F1 collapse immediately at 30 s, from 69.40% to 38.10% and from 74.21%
+to 40.00%, then approach approximately 24-26% by 5 s. Minimal features retain
+79.50% at 30 s and 77.66% at 5 s, but fall to 49.60% at 1 s. Across all three
+feature sets, the whole session is the best horizon and 1 s is the worst; the
+whole-to-1 s deployment losses are 40.73, 46.20, and 48.51 points for minimal,
+Mercury-style, and combined inputs. The connecting lines show ordering across
+the four evaluated categorical horizons and do not estimate untested durations.
+
 #### Minimal Features
 
 ![Minimal-feature F1 by detector and context](figures/session_granularity_minimal.png)
@@ -288,7 +309,7 @@ subsets. Blind prompting, Sonnet 4.6, and fine-tuning paths exist in code but ar
 not represented by completed capture-disjoint artifacts in these tables.
 
 See [`results/published/README.md`](results/published/README.md) for fold-level
-records, provenance, and source-artifact hashes. Regenerate the three figures
+records, provenance, and source-artifact hashes. Regenerate the four figures
 with `python scripts/create_session_granularity_chart.py`.
 
 ## Installation

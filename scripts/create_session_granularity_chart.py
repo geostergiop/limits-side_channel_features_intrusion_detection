@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the README comparison chart from published Phase 7 summaries."""
+"""Create README comparison charts from published Phase 7 summaries."""
 
 from __future__ import annotations
 
@@ -18,6 +18,11 @@ from matplotlib.colors import LinearSegmentedColormap
 ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED = ROOT / "results" / "published"
 FIGURES = ROOT / "figures"
+PDF_METADATA = {
+    "Creator": "scripts/create_session_granularity_chart.py",
+    "CreationDate": None,
+    "ModDate": None,
+}
 
 MODES = ("balanced", "deployment")
 FEATURES = ("minimal", "mercury", "combined")
@@ -251,7 +256,181 @@ def render_feature(
     png_path = FIGURES / f"session_granularity_{feature}.png"
     pdf_path = FIGURES / f"session_granularity_{feature}.pdf"
     fig.savefig(png_path, dpi=220, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    fig.savefig(pdf_path, bbox_inches="tight", metadata=PDF_METADATA)
+    plt.close(fig)
+    print(f"Wrote {png_path.relative_to(ROOT)}")
+    print(f"Wrote {pdf_path.relative_to(ROOT)}")
+
+
+def render_llm_degradation(
+    values: dict[tuple[str, str, str, str], float],
+) -> None:
+    """Render GPT context-sensitivity curves for both evaluation protocols."""
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Serif",
+            "font.size": 9,
+            "axes.titlesize": 11,
+            "figure.facecolor": "#fbfaf7",
+            "axes.facecolor": "#fbfaf7",
+        }
+    )
+    styles = {
+        "minimal": {
+            "label": "Minimal (5)",
+            "color": "#1c6b70",
+            "marker": "o",
+            "linestyle": "-",
+        },
+        "mercury": {
+            "label": "Mercury-style (20)",
+            "color": "#b5533c",
+            "marker": "s",
+            "linestyle": "--",
+        },
+        "combined": {
+            "label": "Combined (25)",
+            "color": "#8b6e1e",
+            "marker": "^",
+            "linestyle": "-.",
+        },
+    }
+    label_offsets = {
+        "balanced": {"minimal": -13, "mercury": 9, "combined": 9},
+        "deployment": {"minimal": 9, "mercury": -14, "combined": 9},
+    }
+    x = np.arange(len(GRANULARITIES))
+    x_labels = ("Whole\nsession", "30 s", "5 s", "1 s")
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 5.7), sharey=True)
+    fig.subplots_adjust(
+        left=0.075,
+        right=0.985,
+        bottom=0.14,
+        top=0.72,
+        wspace=0.045,
+    )
+    handles = []
+    for mode_index, mode in enumerate(MODES):
+        ax = axes[mode_index]
+        for feature in FEATURES:
+            style = styles[feature]
+            series = np.array(
+                [
+                    100 * values[(mode, feature, "GPT-5.4", granularity)]
+                    for granularity in GRANULARITIES
+                ]
+            )
+            line = ax.plot(
+                x,
+                series,
+                color=style["color"],
+                marker=style["marker"],
+                linestyle=style["linestyle"],
+                linewidth=2.4,
+                markersize=6.5,
+                markeredgecolor="#fbfaf7",
+                markeredgewidth=0.8,
+                label=style["label"],
+            )[0]
+            if mode_index == 0:
+                handles.append(line)
+
+            for point_index, value in enumerate(series):
+                granularity = GRANULARITIES[point_index]
+                suffix = "*" if granularity in ("30 s", "1 s") else ""
+                ax.annotate(
+                    f"{value:.1f}{suffix}",
+                    (point_index, value),
+                    xytext=(0, label_offsets[mode][feature]),
+                    textcoords="offset points",
+                    ha="center",
+                    va="center",
+                    fontsize=8.2,
+                    fontweight="bold",
+                    color=style["color"],
+                    bbox={
+                        "boxstyle": "round,pad=0.16",
+                        "facecolor": "#fbfaf7",
+                        "edgecolor": "none",
+                        "alpha": 0.78,
+                    },
+                )
+
+        losses = [
+            100
+            * (
+                values[(mode, feature, "GPT-5.4", "Whole")]
+                - values[(mode, feature, "GPT-5.4", "1 s")]
+            )
+            for feature in FEATURES
+        ]
+        ax.text(
+            0.02,
+            0.035,
+            "Whole to 1 s loss: "
+            f"Minimal {losses[0]:.1f} pp | Mercury {losses[1]:.1f} pp | "
+            f"Combined {losses[2]:.1f} pp",
+            transform=ax.transAxes,
+            fontsize=8.2,
+            color="#3f423f",
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "#eeece5",
+                "edgecolor": "#c7c2b7",
+                "linewidth": 0.7,
+            },
+        )
+        ax.set_xticks(x, x_labels)
+        ax.set_xlim(-0.15, len(GRANULARITIES) - 0.85)
+        ax.set_ylim(0, 100)
+        ax.set_yticks(np.arange(0, 101, 20))
+        ax.grid(axis="y", color="#d6d2c9", linewidth=0.7, alpha=0.8)
+        ax.set_axisbelow(True)
+        ax.set_xlabel("Observation horizon (decreasing left to right)")
+        ax.set_title(
+            "Balanced evaluation (50.00% malicious)"
+            if mode == "balanced"
+            else "Deployment GPT subset (49.36% malicious)"
+        )
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#827d73")
+        ax.spines["bottom"].set_color("#827d73")
+        ax.tick_params(length=0, color="#827d73")
+
+    axes[0].set_ylabel("Malicious-class F1 (%)")
+    fig.suptitle(
+        "GPT-5.4 F1 across decreasing session context",
+        fontsize=16,
+        fontweight="bold",
+        color="#173b38",
+        y=0.965,
+    )
+    fig.text(
+        0.5,
+        0.91,
+        "Lines connect four evaluated categorical horizons; they do not "
+        "interpolate untested durations. *Author-supplied F1-only result.",
+        ha="center",
+        fontsize=9.4,
+        color="#4b4a46",
+    )
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.865),
+        ncol=3,
+        frameon=False,
+        handlelength=3.0,
+        columnspacing=2.2,
+    )
+
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    png_path = FIGURES / "session_llm_context_degradation.png"
+    pdf_path = FIGURES / "session_llm_context_degradation.pdf"
+    fig.savefig(png_path, dpi=220, bbox_inches="tight")
+    fig.savefig(pdf_path, bbox_inches="tight", metadata=PDF_METADATA)
     plt.close(fig)
     print(f"Wrote {png_path.relative_to(ROOT)}")
     print(f"Wrote {pdf_path.relative_to(ROOT)}")
@@ -259,6 +438,7 @@ def render_feature(
 
 def main() -> None:
     values = collect_values()
+    render_llm_degradation(values)
     for feature in FEATURES:
         render_feature(values, feature)
 

@@ -114,6 +114,14 @@ class PublicationArtifactTests(unittest.TestCase):
 
     def test_readme_comparison_figures_exist(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        degradation_png = "figures/session_llm_context_degradation.png"
+        degradation_pdf = "figures/session_llm_context_degradation.pdf"
+        self.assertIn(degradation_png, readme)
+        self.assertIn(degradation_pdf, readme)
+        self.assertTrue((ROOT / degradation_png).is_file())
+        degradation_pdf_bytes = (ROOT / degradation_pdf).read_bytes()
+        self.assertEqual(degradation_pdf_bytes[:5], b"%PDF-")
+        self.assertNotIn(b"/CreationDate", degradation_pdf_bytes)
         for feature in ("minimal", "mercury", "combined"):
             relative = f"figures/session_granularity_{feature}.png"
             self.assertIn(relative, readme)
