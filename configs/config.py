@@ -1,6 +1,6 @@
 """
-Configuration for LLM-Powered Malicious Traffic Detection Experiments.
-Maps directly to the ESORICS 2018 feature set and extends with LLM parameters.
+Configuration for payload-free malicious traffic detection experiments.
+Includes the original minimal feature set and the session experiment extensions.
 """
 
 import os
@@ -23,7 +23,7 @@ for d in [RAW_DIR, PROCESSED_DIR, RESULTS_DIR, PROMPTS_DIR]:
 # ============================================================================
 # ESORICS 2018 SIDE-CHANNEL FEATURES (Section 4.2 of the paper)
 # ============================================================================
-# These are the ONLY 5 features we use — the core thesis.
+# Original five-feature configuration retained for controlled comparisons.
 SIDE_CHANNEL_FEATURES = [
     "packet_size",       # Ps: total packet size in bytes
     "payload_size",      # PAs: TCP data segment size
@@ -266,7 +266,7 @@ ML_CONFIG = {
 # ============================================================================
 LLM_CONFIG = {
     # API configuration - user must set env vars
-    "anthropic_model": "claude-sonnet-5",
+    "anthropic_model": "claude-sonnet-4-6",
     "openai_model": "gpt-5.4",
     "default_provider": "openai",
 
@@ -305,7 +305,7 @@ LLM_CONFIG = {
 # ============================================================================
 # SESSION EXPERIMENT CONFIGURATION
 # ============================================================================
-NDSS_CONFIG = {
+SESSION_CONFIG = {
     # Feature configurations
     "feature_sets": ["minimal", "mercury", "combined"],
     "default_feature_set": "combined",

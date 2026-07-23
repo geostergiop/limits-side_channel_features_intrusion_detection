@@ -27,7 +27,7 @@ from sklearn.metrics import (
 from sklearn.preprocessing import StandardScaler
 from tabulate import tabulate
 
-from configs.config import ML_CONFIG, NDSS_CONFIG, RESULTS_DIR, SESSION_SPLIT_CONFIG
+from configs.config import ML_CONFIG, SESSION_CONFIG, RESULTS_DIR, SESSION_SPLIT_CONFIG
 from src.classical_ml_v2 import (
     BOOSTER_ALGORITHMS,
     SHORT_NAMES,
@@ -35,9 +35,9 @@ from src.classical_ml_v2 import (
     get_algorithm,
 )
 from src.llm_experiments import LLMClient
-from src.ndss_dataset import NDSSDatasetSpec, load_or_create_ndss_manifest
-from src.ndss_finetune import create_openai_finetune_job, export_finetune_corpus
-from src.ndss_prompts import build_system_prompt, build_user_prompt
+from src.session_dataset import SessionDatasetSpec, load_or_create_session_manifest
+from src.session_finetune import create_openai_finetune_job, export_finetune_corpus
+from src.session_prompts import build_system_prompt, build_user_prompt
 from src.database import get_db
 from src.session_splits import (
     CAPTURE_DISJOINT_5FOLD,
@@ -49,7 +49,7 @@ from src.session_splits import (
 
 
 @dataclass(frozen=True)
-class NDSSLLMRunConfig:
+class SessionLLMRunConfig:
     budget_profile: str
     result_label: str
     feature_sets: list[str] | None
@@ -103,9 +103,9 @@ def _parse_window_seconds(value: str | None) -> list[float] | None:
         try:
             window = float(item)
         except ValueError as exc:
-            raise ValueError(f"Invalid --ndss-window-seconds value {item!r}") from exc
+            raise ValueError(f"Invalid --session-window-seconds value {item!r}") from exc
         if window <= 0:
-            raise ValueError("--ndss-window-seconds values must be positive")
+            raise ValueError("--session-window-seconds values must be positive")
         windows.append(window)
     return windows or None
 
@@ -132,9 +132,9 @@ def _parse_repeat_indices(value: str | None) -> list[int] | None:
         try:
             index = int(item)
         except ValueError as exc:
-            raise ValueError(f"Invalid --ndss-repeat-indices value {item!r}") from exc
+            raise ValueError(f"Invalid --session-repeat-indices value {item!r}") from exc
         if index < 0:
-            raise ValueError("--ndss-repeat-indices values must be non-negative")
+            raise ValueError("--session-repeat-indices values must be non-negative")
         indices.append(index)
     if not indices:
         return None
@@ -153,8 +153,8 @@ def _resolve_llm_run_config(
     validation_samples_per_repeat: int | None,
     test_samples_per_repeat: int | None,
     max_calls: int | None,
-) -> NDSSLLMRunConfig:
-    profiles = dict(NDSS_CONFIG.get("llm_budget_profiles", {"full": {}}))
+) -> SessionLLMRunConfig:
+    profiles = dict(SESSION_CONFIG.get("llm_budget_profiles", {"full": {}}))
     profile_key = str(budget_profile or "full").strip().lower()
     if profile_key not in profiles:
         raise ValueError(f"Unknown Session LLM budget profile={budget_profile!r}")
@@ -181,9 +181,9 @@ def _resolve_llm_run_config(
         windows = [float(item) for item in profile["behavior_window_seconds"]]
 
     cli_repeat_indices = _parse_repeat_indices(repeat_indices)
-    cli_repeat_limit = _positive_optional_int(repeat_limit, "--ndss-repeat-limit")
+    cli_repeat_limit = _positive_optional_int(repeat_limit, "--session-repeat-limit")
     if cli_repeat_indices is not None and cli_repeat_limit is not None:
-        raise ValueError("Use either --ndss-repeat-indices or --ndss-repeat-limit, not both")
+        raise ValueError("Use either --session-repeat-indices or --session-repeat-limit, not both")
 
     resolved_repeat_indices = cli_repeat_indices
     resolved_repeat_limit = cli_repeat_limit
@@ -200,40 +200,40 @@ def _resolve_llm_run_config(
     ):
         resolved_repeat_limit = int(profile["repeat_limit"])
 
-    balanced_samples = _positive_optional_int(samples_per_repeat, "--ndss-llm-samples-per-repeat")
+    balanced_samples = _positive_optional_int(samples_per_repeat, "--session-llm-samples-per-repeat")
     if balanced_samples is None:
         balanced_samples = int(
             profile.get(
                 "balanced_eval_samples_per_repeat",
-                NDSS_CONFIG.get("llm_balanced_eval_samples_per_repeat", 80),
+                SESSION_CONFIG.get("llm_balanced_eval_samples_per_repeat", 80),
             )
         )
 
     deployment_val = _positive_optional_int(
         validation_samples_per_repeat,
-        "--ndss-llm-validation-samples-per-repeat",
+        "--session-llm-validation-samples-per-repeat",
     )
     if deployment_val is None:
         deployment_val = int(
             profile.get(
                 "deployment_validation_samples_per_repeat",
-                NDSS_CONFIG.get("llm_deployment_validation_samples_per_repeat", 80),
+                SESSION_CONFIG.get("llm_deployment_validation_samples_per_repeat", 80),
             )
         )
 
     deployment_test = _positive_optional_int(
         test_samples_per_repeat,
-        "--ndss-llm-test-samples-per-repeat",
+        "--session-llm-test-samples-per-repeat",
     )
     if deployment_test is None:
         deployment_test = int(
             profile.get(
                 "deployment_test_samples_per_repeat",
-                NDSS_CONFIG.get("llm_deployment_test_samples_per_repeat", 160),
+                SESSION_CONFIG.get("llm_deployment_test_samples_per_repeat", 160),
             )
         )
 
-    resolved_max_calls = _positive_optional_int(max_calls, "--ndss-llm-max-calls")
+    resolved_max_calls = _positive_optional_int(max_calls, "--session-llm-max-calls")
     if resolved_max_calls is None and profile.get("max_calls_per_run") is not None:
         resolved_max_calls = int(profile["max_calls_per_run"])
 
@@ -270,7 +270,7 @@ def _resolve_llm_run_config(
         ).hexdigest()[:10]
         result_label = f"{profile_key}_custom_{label_hash}"
 
-    return NDSSLLMRunConfig(
+    return SessionLLMRunConfig(
         budget_profile=profile_key,
         result_label=result_label,
         feature_sets=feature_sets,
@@ -286,8 +286,8 @@ def _resolve_llm_run_config(
     )
 
 
-def _filter_llm_specs(specs: list[NDSSDatasetSpec], config: NDSSLLMRunConfig) -> list[NDSSDatasetSpec]:
-    filtered: list[NDSSDatasetSpec] = []
+def _filter_llm_specs(specs: list[SessionDatasetSpec], config: SessionLLMRunConfig) -> list[SessionDatasetSpec]:
+    filtered: list[SessionDatasetSpec] = []
     for spec in specs:
         if config.feature_sets is not None and spec.feature_set not in config.feature_sets:
             continue
@@ -314,7 +314,7 @@ def _protocol_fold_count(split_mode: str) -> int:
 
 
 def _allowed_repeat_indices(
-    config: NDSSLLMRunConfig,
+    config: SessionLLMRunConfig,
     split_mode: str,
 ) -> set[int] | None:
     if config.repeat_indices is not None:
@@ -331,7 +331,7 @@ def _allowed_repeat_indices(
     return set(range(limit))
 
 
-def _llm_result_suffix(evaluation_mode: str, config: NDSSLLMRunConfig) -> str:
+def _llm_result_suffix(evaluation_mode: str, config: SessionLLMRunConfig) -> str:
     if config.result_label == "full":
         return str(evaluation_mode)
     return f"{evaluation_mode}_{config.result_label}"
@@ -439,11 +439,11 @@ def _select_threshold_from_validation(y_true: np.ndarray, scores: np.ndarray) ->
     if len(np.unique(y_true)) != 2:
         raise ValueError("Deployment threshold selection requires both validation classes")
     strategy = str(
-        NDSS_CONFIG.get("deployment_threshold_strategy", "max_recall_at_fpr")
+        SESSION_CONFIG.get("deployment_threshold_strategy", "max_recall_at_fpr")
     ).strip().lower()
-    metric = str(NDSS_CONFIG.get("deployment_threshold_metric", "f1"))
-    max_fpr = float(NDSS_CONFIG.get("deployment_max_validation_fpr", 0.05))
-    grid_size = int(NDSS_CONFIG.get("deployment_threshold_grid_size", 101))
+    metric = str(SESSION_CONFIG.get("deployment_threshold_metric", "f1"))
+    max_fpr = float(SESSION_CONFIG.get("deployment_max_validation_fpr", 0.05))
+    grid_size = int(SESSION_CONFIG.get("deployment_threshold_grid_size", 101))
     clipped = np.clip(np.asarray(scores, dtype=float), 0.0, 1.0)
     unique_scores = np.unique(clipped)
     if len(unique_scores) <= grid_size:
@@ -637,7 +637,7 @@ def _train_and_evaluate_repeat(
                 }
             )
         else:
-            raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+            raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
     else:
         base_scaler = StandardScaler()
         X_train_s = _as_feature_frame(base_scaler.fit_transform(X_train), feature_cols)
@@ -683,7 +683,7 @@ def _train_and_evaluate_repeat(
                 }
             )
         else:
-            raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+            raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
     metrics = _compute_binary_metrics(y_test, y_pred, test_scores)
     metrics.update(
         {
@@ -820,7 +820,7 @@ def _ci_text(row: dict, key: str) -> str:
     return f"[{low:.4f}, {high:.4f}]"
 
 
-def run_local_ndss_experiment(
+def run_local_session_experiment(
     dataset: pd.DataFrame,
     feature_cols: list[str],
     manifest: dict,
@@ -963,7 +963,7 @@ def _family_label(value) -> str:
 def _expected_malware_families() -> list[str]:
     return [
         str(family).strip()
-        for family in NDSS_CONFIG.get("expected_malware_families", [])
+        for family in SESSION_CONFIG.get("expected_malware_families", [])
         if str(family).strip()
     ]
 
@@ -1098,7 +1098,7 @@ def _sample_eval_subset(
         return _balanced_subset(df, int(sample_size), seed, family_stratified=family_stratified)
     if mode == "deployment":
         return _natural_subset(df, int(sample_size), seed)
-    raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+    raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
 
 
 def _positive_score_from_llm_response(response: dict) -> float | None:
@@ -1130,8 +1130,8 @@ def _build_llm_memory_context(
     sample_unit: str,
     seed: int,
 ) -> tuple[str, dict]:
-    examples_per_class = int(NDSS_CONFIG.get("llm_memory_examples_per_class", 4))
-    chars_per_example = int(NDSS_CONFIG.get("llm_memory_chars_per_example", 900))
+    examples_per_class = int(SESSION_CONFIG.get("llm_memory_examples_per_class", 4))
+    chars_per_example = int(SESSION_CONFIG.get("llm_memory_chars_per_example", 900))
     rng = np.random.default_rng(seed)
 
     class_counts = train_df["is_malicious"].astype(int).value_counts().to_dict()
@@ -1363,7 +1363,7 @@ def _summarise_llm_rows(rows: list[dict], experiment_name: str) -> list[dict]:
     return repeat_metric_rows + family_summary_rows + [summary]
 
 
-def run_llm_ndss_experiment(
+def run_llm_session_experiment(
     dataset: pd.DataFrame,
     manifest: dict,
     *,
@@ -1450,17 +1450,17 @@ def run_llm_ndss_experiment(
     balanced_limit = int(
         balanced_samples_per_repeat
         if balanced_samples_per_repeat is not None
-        else NDSS_CONFIG.get("llm_balanced_eval_samples_per_repeat", 80)
+        else SESSION_CONFIG.get("llm_balanced_eval_samples_per_repeat", 80)
     )
     deployment_val_limit = int(
         deployment_validation_samples_per_repeat
         if deployment_validation_samples_per_repeat is not None
-        else NDSS_CONFIG.get("llm_deployment_validation_samples_per_repeat", 80)
+        else SESSION_CONFIG.get("llm_deployment_validation_samples_per_repeat", 80)
     )
     deployment_test_limit = int(
         deployment_test_samples_per_repeat
         if deployment_test_samples_per_repeat is not None
-        else NDSS_CONFIG.get("llm_deployment_test_samples_per_repeat", 160)
+        else SESSION_CONFIG.get("llm_deployment_test_samples_per_repeat", 160)
     )
     if mode == "balanced":
         estimated_calls = len(materialized) * balanced_limit
@@ -1468,7 +1468,7 @@ def run_llm_ndss_experiment(
         estimated_calls = len(materialized) * (deployment_val_limit + deployment_test_limit)
     else:
         estimated_calls = 0
-    progress_every = max(1, int(NDSS_CONFIG.get("llm_progress_every_calls", 20)))
+    progress_every = max(1, int(SESSION_CONFIG.get("llm_progress_every_calls", 20)))
     call_counter = 0
     checkpoint_prefix_rows = checkpoint_prefix_rows or []
 
@@ -1587,7 +1587,7 @@ def run_llm_ndss_experiment(
             )
             eval_df = _sample_eval_subset(test_df, deployment_test_limit, repeat_seed + 31, mode)
         else:
-            raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+            raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
 
         print(
             f"  Repeat {repeat_number}/{len(materialized)} "
@@ -1666,15 +1666,15 @@ def run_llm_ndss_experiment(
 def _default_specs(
     evaluation_mode: str,
     split_mode: str,
-) -> tuple[list[NDSSDatasetSpec], list[NDSSDatasetSpec], NDSSDatasetSpec]:
+) -> tuple[list[SessionDatasetSpec], list[SessionDatasetSpec], SessionDatasetSpec]:
     group_by = "capture"
-    session_size = int(NDSS_CONFIG.get("session_sample_size", 6000))
-    packet_size = int(NDSS_CONFIG.get("packet_ablation_sample_size", 3000))
-    llm_specs: list[NDSSDatasetSpec] = []
-    local_specs: list[NDSSDatasetSpec] = []
-    for feature_set in NDSS_CONFIG.get("feature_sets", ["minimal", "mercury", "combined"]):
+    session_size = int(SESSION_CONFIG.get("session_sample_size", 6000))
+    packet_size = int(SESSION_CONFIG.get("packet_ablation_sample_size", 3000))
+    llm_specs: list[SessionDatasetSpec] = []
+    local_specs: list[SessionDatasetSpec] = []
+    for feature_set in SESSION_CONFIG.get("feature_sets", ["minimal", "mercury", "combined"]):
         local_specs.append(
-            NDSSDatasetSpec(
+            SessionDatasetSpec(
                 sample_unit="session_sequence",
                 feature_set=feature_set,
                 group_by=group_by,
@@ -1684,7 +1684,7 @@ def _default_specs(
             )
         )
         llm_specs.append(
-            NDSSDatasetSpec(
+            SessionDatasetSpec(
                 sample_unit="session_sequence",
                 feature_set=feature_set,
                 group_by=group_by,
@@ -1693,8 +1693,8 @@ def _default_specs(
                 split_mode=split_mode,
             )
         )
-        for window_seconds in NDSS_CONFIG.get("behavior_window_seconds", [5.0]):
-            spec = NDSSDatasetSpec(
+        for window_seconds in SESSION_CONFIG.get("behavior_window_seconds", [5.0]):
+            spec = SessionDatasetSpec(
                 sample_unit="behavior_window",
                 feature_set=feature_set,
                 group_by=group_by,
@@ -1706,8 +1706,8 @@ def _default_specs(
             local_specs.append(spec)
             llm_specs.append(spec)
 
-        if NDSS_CONFIG.get("include_packet_ablation", True):
-            packet_spec = NDSSDatasetSpec(
+        if SESSION_CONFIG.get("include_packet_ablation", True):
+            packet_spec = SessionDatasetSpec(
                 sample_unit="packet_ablation",
                 feature_set=feature_set,
                 group_by=group_by,
@@ -1719,16 +1719,16 @@ def _default_specs(
             llm_specs.append(packet_spec)
 
     finetune_sample_unit = str(
-        NDSS_CONFIG.get("finetune_sample_unit", "behavior_window")
+        SESSION_CONFIG.get("finetune_sample_unit", "behavior_window")
     )
-    finetune_spec = NDSSDatasetSpec(
+    finetune_spec = SessionDatasetSpec(
         sample_unit=finetune_sample_unit,
-        feature_set=str(NDSS_CONFIG.get("default_feature_set", "combined")),
+        feature_set=str(SESSION_CONFIG.get("default_feature_set", "combined")),
         group_by=group_by,
         sample_size=session_size,
         evaluation_mode=evaluation_mode,
         window_seconds=(
-            float(NDSS_CONFIG.get("finetune_window_seconds", 5.0))
+            float(SESSION_CONFIG.get("finetune_window_seconds", 5.0))
             if finetune_sample_unit == "behavior_window"
             else None
         ),
@@ -1737,7 +1737,7 @@ def _default_specs(
     return local_specs, llm_specs, finetune_spec
 
 
-def _spec_name(spec: NDSSDatasetSpec) -> str:
+def _spec_name(spec: SessionDatasetSpec) -> str:
     bits = [spec.sample_unit, spec.feature_set, spec.split_mode, spec.evaluation_mode]
     if spec.window_seconds is not None:
         bits.append(f"{str(spec.window_seconds).replace('.', 'p')}s")
@@ -2306,10 +2306,10 @@ def _build_llm_context_paired_differences(rows: list[dict]) -> list[dict]:
 
 
 def _estimate_llm_workload(
-    llm_specs: list[NDSSDatasetSpec],
+    llm_specs: list[SessionDatasetSpec],
     context_modes: list[str],
     evaluation_mode: str,
-    config: NDSSLLMRunConfig,
+    config: SessionLLMRunConfig,
     split_mode: str,
 ) -> dict:
     if config.repeat_indices is not None:
@@ -2353,8 +2353,8 @@ def main(
     prepare_finetune: bool = True,
     start_finetune_job: bool = False,
     finetuned_model: str | None = None,
-    evaluation_mode: str = str(NDSS_CONFIG.get("default_evaluation_mode", "balanced")),
-    llm_context_mode: str = str(NDSS_CONFIG.get("llm_context_mode", "both")),
+    evaluation_mode: str = str(SESSION_CONFIG.get("default_evaluation_mode", "balanced")),
+    llm_context_mode: str = str(SESSION_CONFIG.get("llm_context_mode", "both")),
     allow_large_llm_run: bool = False,
     llm_budget_profile: str = "full",
     llm_feature_set: str | None = None,
@@ -2370,8 +2370,8 @@ def main(
 ) -> None:
     conn = get_db()
     eval_mode = str(evaluation_mode).strip().lower()
-    if eval_mode not in set(NDSS_CONFIG.get("evaluation_modes", ["balanced", "deployment"])):
-        raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+    if eval_mode not in set(SESSION_CONFIG.get("evaluation_modes", ["balanced", "deployment"])):
+        raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
     split_mode = str(split_mode).strip().lower()
     if split_mode not in SESSION_SPLIT_MODES:
         raise ValueError(f"Unknown session split_mode={split_mode!r}")
@@ -2416,7 +2416,7 @@ def main(
         workload = _estimate_llm_workload(
             llm_specs, context_modes, eval_mode, llm_run_config, split_mode
         )
-        threshold = int(llm_run_config.max_calls or NDSS_CONFIG.get("llm_large_run_call_threshold", 1000))
+        threshold = int(llm_run_config.max_calls or SESSION_CONFIG.get("llm_large_run_call_threshold", 1000))
         print("\nSession LLM preflight:")
         print(
             f"  profile={llm_run_config.budget_profile} | result_label={llm_run_config.result_label} | "
@@ -2442,16 +2442,16 @@ def main(
             raise RuntimeError(
                 "Refusing to start a large Session LLM run without explicit opt-in. "
                 f"Estimated calls={workload['estimated_calls']} exceeds threshold={threshold}. "
-                "Rerun with --allow-large-llm-run, reduce NDSS_CONFIG LLM sample sizes, "
+                "Rerun with --allow-large-llm-run, reduce SESSION_CONFIG LLM sample sizes, "
                 "or run a narrower context/mode first."
             )
 
     if run_local:
-        ensure_algorithms_available(list(NDSS_CONFIG.get("local_algorithms", [])))
+        ensure_algorithms_available(list(SESSION_CONFIG.get("local_algorithms", [])))
         for spec in local_specs:
             exp_name = _spec_name(spec)
             try:
-                dataset, feature_cols, manifest, manifest_path = load_or_create_ndss_manifest(
+                dataset, feature_cols, manifest, manifest_path = load_or_create_session_manifest(
                     conn, spec
                 )
             except SessionSplitFeasibilityError as exc:
@@ -2473,13 +2473,13 @@ def main(
                 )
                 continue
             local_results.extend(
-                run_local_ndss_experiment(
+                run_local_session_experiment(
                     dataset,
                     feature_cols,
                     manifest,
                     manifest_path,
                     experiment_name=exp_name,
-                    algorithms=list(NDSS_CONFIG.get("local_algorithms", [])),
+                    algorithms=list(SESSION_CONFIG.get("local_algorithms", [])),
                     evaluation_mode=eval_mode,
                 )
             )
@@ -2489,7 +2489,7 @@ def main(
     if run_llm:
         for spec in llm_specs:
             try:
-                dataset, _feature_cols, manifest, _manifest_path = load_or_create_ndss_manifest(
+                dataset, _feature_cols, manifest, _manifest_path = load_or_create_session_manifest(
                     conn, spec
                 )
             except SessionSplitFeasibilityError as exc:
@@ -2515,7 +2515,7 @@ def main(
                 if spec.sample_unit == "packet_ablation" and context_mode == "memory":
                     continue
                 exp_name = _spec_name(spec) + f"_{context_mode}"
-                new_rows = run_llm_ndss_experiment(
+                new_rows = run_llm_session_experiment(
                     dataset,
                     manifest,
                     experiment_name=exp_name,
@@ -2543,7 +2543,7 @@ def main(
         llm_results.extend(_build_llm_context_paired_differences(llm_results))
 
     if prepare_finetune:
-        dataset, _feature_cols, manifest, _manifest_path = load_or_create_ndss_manifest(conn, finetune_spec)
+        dataset, _feature_cols, manifest, _manifest_path = load_or_create_session_manifest(conn, finetune_spec)
         finetune_metadata = export_finetune_corpus(
             dataset,
             manifest,
@@ -2556,10 +2556,10 @@ def main(
             )
             finetune_metadata.update(job_info)
         if finetuned_model:
-            eval_repeat_index = int(NDSS_CONFIG.get("finetune_eval_repeat_index", 0))
+            eval_repeat_index = int(SESSION_CONFIG.get("finetune_eval_repeat_index", 0))
             finetune_experiment = _spec_name(finetune_spec) + "_finetuned_blind"
             llm_results.extend(
-                run_llm_ndss_experiment(
+                run_llm_session_experiment(
                     dataset,
                     manifest,
                     experiment_name=finetune_experiment,

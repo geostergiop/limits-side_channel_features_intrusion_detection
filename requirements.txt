@@ -14,9 +14,9 @@ anthropic>=0.39.0
 openai>=1.0.0
 beautifulsoup4>=4.12.0
 
-# Compact mode — embedding-based few-shot retrieval (optional but recommended)
+# Compact mode: embedding-based few-shot retrieval (optional but recommended)
 # Falls back to sklearn cosine-NN on raw features if not installed.
 sentence-transformers>=2.7.0
 
-# Token reduction validation script
+# Prompt token accounting
 tiktoken>=0.7.0

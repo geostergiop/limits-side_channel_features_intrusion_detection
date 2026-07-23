@@ -22,7 +22,7 @@ Usage:
 import argparse
 from pathlib import Path
 
-from configs.config import NDSS_CONFIG, SESSION_SPLIT_CONFIG
+from configs.config import SESSION_CONFIG, SESSION_SPLIT_CONFIG
 
 
 def print_phase_banner(title: str, marker: str = "=") -> None:
@@ -118,30 +118,30 @@ def run_phase_6(adv_phase="all", provider="openai",
 
 
 def run_phase_7(provider="openai", dry_run=False,
-                ndss_mode="all", finetuned_model=None,
+                session_mode="all", finetuned_model=None,
                 start_finetune_job=False,
-                ndss_eval_mode="balanced",
-                ndss_llm_context="both",
+                session_eval_mode="balanced",
+                session_llm_context="both",
                 allow_large_llm_run=False,
-                ndss_budget_profile="full",
-                ndss_feature_set=None,
-                ndss_sample_unit=None,
-                ndss_window_seconds=None,
-                ndss_repeat_indices=None,
-                ndss_repeat_limit=None,
-                ndss_llm_samples_per_repeat=None,
-                ndss_llm_validation_samples_per_repeat=None,
-                ndss_llm_test_samples_per_repeat=None,
-                 ndss_llm_max_calls=None,
-                 session_split_mode=None):
+                session_budget_profile="full",
+                session_feature_set=None,
+                session_sample_unit=None,
+                session_window_seconds=None,
+                session_repeat_indices=None,
+                session_repeat_limit=None,
+                session_llm_samples_per_repeat=None,
+                session_llm_validation_samples_per_repeat=None,
+                session_llm_test_samples_per_repeat=None,
+                session_llm_max_calls=None,
+                session_split_mode=None):
     """Run the session-based major-version experiment suite."""
     print_phase_banner("PHASE 7: Session-Based Experiment Suite")
-    from src.ndss_experiments import main as ndss_main
+    from src.session_experiments import main as session_main
 
-    run_local = ndss_mode in {"all", "local"}
-    run_llm = ndss_mode in {"all", "llm"}
-    prepare_finetune = ndss_mode in {"all", "finetune"}
-    ndss_main(
+    run_local = session_mode in {"all", "local"}
+    run_llm = session_mode in {"all", "llm"}
+    prepare_finetune = session_mode in {"all", "finetune"}
+    session_main(
         provider=provider,
         dry_run=dry_run,
         run_local=run_local,
@@ -149,19 +149,19 @@ def run_phase_7(provider="openai", dry_run=False,
         prepare_finetune=prepare_finetune,
         start_finetune_job=start_finetune_job,
         finetuned_model=finetuned_model,
-        evaluation_mode=ndss_eval_mode,
-        llm_context_mode=ndss_llm_context,
+        evaluation_mode=session_eval_mode,
+        llm_context_mode=session_llm_context,
         allow_large_llm_run=allow_large_llm_run,
-        llm_budget_profile=ndss_budget_profile,
-        llm_feature_set=ndss_feature_set,
-        llm_sample_unit=ndss_sample_unit,
-        llm_window_seconds=ndss_window_seconds,
-        llm_repeat_indices=ndss_repeat_indices,
-        llm_repeat_limit=ndss_repeat_limit,
-        llm_samples_per_repeat=ndss_llm_samples_per_repeat,
-        llm_validation_samples_per_repeat=ndss_llm_validation_samples_per_repeat,
-        llm_test_samples_per_repeat=ndss_llm_test_samples_per_repeat,
-        llm_max_calls=ndss_llm_max_calls,
+        llm_budget_profile=session_budget_profile,
+        llm_feature_set=session_feature_set,
+        llm_sample_unit=session_sample_unit,
+        llm_window_seconds=session_window_seconds,
+        llm_repeat_indices=session_repeat_indices,
+        llm_repeat_limit=session_repeat_limit,
+        llm_samples_per_repeat=session_llm_samples_per_repeat,
+        llm_validation_samples_per_repeat=session_llm_validation_samples_per_repeat,
+        llm_test_samples_per_repeat=session_llm_test_samples_per_repeat,
+        llm_max_calls=session_llm_max_calls,
         split_mode=session_split_mode or SESSION_SPLIT_CONFIG["default_mode"],
     )
 
@@ -193,10 +193,10 @@ def main():
                         help="Phase 6 sub-phase (default: all)")
     parser.add_argument("--skip-llm", action="store_true",
                         help="Phase 6: skip LLM evaluation (no API calls)")
-    parser.add_argument("--session-mode", "--ndss-mode", dest="ndss_mode", default="all",
+    parser.add_argument("--session-mode", dest="session_mode", default="all",
                         choices=["all", "local", "llm", "finetune"],
                         help="Phase 7 subset to run (default: all)")
-    parser.add_argument("--session-eval-mode", "--ndss-eval-mode", dest="ndss_eval_mode", default="balanced",
+    parser.add_argument("--session-eval-mode", dest="session_eval_mode", default="balanced",
                         choices=["balanced", "deployment"],
                         help="Phase 7 evaluation mode: balanced scientific comparison "
                              "or deployment-style prevalence-faithful testing")
@@ -209,31 +209,31 @@ def main():
             "protocol; within_capture_temporal is a secondary seen-capture upper bound"
         ),
     )
-    parser.add_argument("--session-llm-context", "--ndss-llm-context", dest="ndss_llm_context", default="both",
+    parser.add_argument("--session-llm-context", dest="session_llm_context", default="both",
                         choices=["blind", "memory", "both"],
                         help="Phase 7 LLM context mode: blind prompts, training-split memory prompts, or both")
     parser.add_argument("--allow-large-llm-run", action="store_true",
                         help="Phase 7: explicitly allow large prompted LLM sweeps above the configured call threshold")
-    parser.add_argument("--session-budget-profile", "--ndss-budget-profile", dest="ndss_budget_profile", default="full",
-                        choices=sorted(NDSS_CONFIG.get("llm_budget_profiles", {"full": {}}).keys()),
+    parser.add_argument("--session-budget-profile", dest="session_budget_profile", default="full",
+                        choices=sorted(SESSION_CONFIG.get("llm_budget_profiles", {"full": {}}).keys()),
                         help="Phase 7 LLM budget profile. paper_5k is the budgeted balanced+deployment design; paper_6k is a higher-depth deployment profile.")
-    parser.add_argument("--session-feature-set", "--ndss-feature-set", dest="ndss_feature_set", metavar="FEATURE_SET", default=None,
+    parser.add_argument("--session-feature-set", dest="session_feature_set", metavar="FEATURE_SET", default=None,
                         help="Phase 7 LLM feature filter: all, minimal, mercury, combined, or comma-separated values")
-    parser.add_argument("--session-sample-unit", "--ndss-sample-unit", dest="ndss_sample_unit", metavar="SAMPLE_UNIT", default=None,
+    parser.add_argument("--session-sample-unit", dest="session_sample_unit", metavar="SAMPLE_UNIT", default=None,
                         help="Phase 7 LLM sample-unit filter: all, session_sequence, behavior_window, packet_ablation, or comma-separated values")
-    parser.add_argument("--session-window-seconds", "--ndss-window-seconds", dest="ndss_window_seconds", metavar="SECONDS", default=None,
+    parser.add_argument("--session-window-seconds", dest="session_window_seconds", metavar="SECONDS", default=None,
                         help="Phase 7 LLM behavior-window filter: all or comma-separated numeric seconds, e.g. 5.0")
-    parser.add_argument("--session-repeat-limit", "--ndss-repeat-limit", dest="ndss_repeat_limit", metavar="N", type=int, default=None,
+    parser.add_argument("--session-repeat-limit", dest="session_repeat_limit", metavar="N", type=int, default=None,
                         help="Phase 7 LLM: use only the first N frozen repeats")
-    parser.add_argument("--session-repeat-indices", "--ndss-repeat-indices", dest="ndss_repeat_indices", metavar="INDICES", default=None,
+    parser.add_argument("--session-repeat-indices", dest="session_repeat_indices", metavar="INDICES", default=None,
                         help="Phase 7 LLM: comma-separated frozen fold indices, e.g. 0,1,2,3,4")
-    parser.add_argument("--session-llm-samples-per-repeat", "--ndss-llm-samples-per-repeat", dest="ndss_llm_samples_per_repeat", metavar="N", type=int, default=None,
+    parser.add_argument("--session-llm-samples-per-repeat", dest="session_llm_samples_per_repeat", metavar="N", type=int, default=None,
                         help="Phase 7 LLM balanced mode: test samples per repeat")
-    parser.add_argument("--session-llm-validation-samples-per-repeat", "--ndss-llm-validation-samples-per-repeat", dest="ndss_llm_validation_samples_per_repeat", metavar="N", type=int, default=None,
+    parser.add_argument("--session-llm-validation-samples-per-repeat", dest="session_llm_validation_samples_per_repeat", metavar="N", type=int, default=None,
                         help="Phase 7 LLM deployment mode: validation samples per repeat")
-    parser.add_argument("--session-llm-test-samples-per-repeat", "--ndss-llm-test-samples-per-repeat", dest="ndss_llm_test_samples_per_repeat", metavar="N", type=int, default=None,
+    parser.add_argument("--session-llm-test-samples-per-repeat", dest="session_llm_test_samples_per_repeat", metavar="N", type=int, default=None,
                         help="Phase 7 LLM deployment mode: test samples per repeat")
-    parser.add_argument("--session-llm-max-calls", "--ndss-llm-max-calls", dest="ndss_llm_max_calls", metavar="N", type=int, default=None,
+    parser.add_argument("--session-llm-max-calls", dest="session_llm_max_calls", metavar="N", type=int, default=None,
                         help="Phase 7 LLM: hard maximum estimated API calls for this run")
     parser.add_argument("--finetuned-model", default=None,
                         help="Phase 7: evaluate a specific fine-tuned OpenAI model id")
@@ -273,22 +273,22 @@ def main():
     if 7 in phases:
         run_phase_7(provider=args.provider,
                     dry_run=args.dry_run,
-                    ndss_mode=args.ndss_mode,
+                    session_mode=args.session_mode,
                     finetuned_model=args.finetuned_model,
                     start_finetune_job=args.start_finetune_job,
-                    ndss_eval_mode=args.ndss_eval_mode,
-                    ndss_llm_context=args.ndss_llm_context,
+                    session_eval_mode=args.session_eval_mode,
+                    session_llm_context=args.session_llm_context,
                     allow_large_llm_run=args.allow_large_llm_run,
-                    ndss_budget_profile=args.ndss_budget_profile,
-                    ndss_feature_set=args.ndss_feature_set,
-                    ndss_sample_unit=args.ndss_sample_unit,
-                    ndss_window_seconds=args.ndss_window_seconds,
-                    ndss_repeat_indices=args.ndss_repeat_indices,
-                    ndss_repeat_limit=args.ndss_repeat_limit,
-                    ndss_llm_samples_per_repeat=args.ndss_llm_samples_per_repeat,
-                    ndss_llm_validation_samples_per_repeat=args.ndss_llm_validation_samples_per_repeat,
-                    ndss_llm_test_samples_per_repeat=args.ndss_llm_test_samples_per_repeat,
-                    ndss_llm_max_calls=args.ndss_llm_max_calls,
+                    session_budget_profile=args.session_budget_profile,
+                    session_feature_set=args.session_feature_set,
+                    session_sample_unit=args.session_sample_unit,
+                    session_window_seconds=args.session_window_seconds,
+                    session_repeat_indices=args.session_repeat_indices,
+                    session_repeat_limit=args.session_repeat_limit,
+                    session_llm_samples_per_repeat=args.session_llm_samples_per_repeat,
+                    session_llm_validation_samples_per_repeat=args.session_llm_validation_samples_per_repeat,
+                    session_llm_test_samples_per_repeat=args.session_llm_test_samples_per_repeat,
+                    session_llm_max_calls=args.session_llm_max_calls,
                     session_split_mode=args.session_split_mode)
 
     print("\n" + "=" * 70)

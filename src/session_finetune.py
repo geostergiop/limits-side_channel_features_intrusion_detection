@@ -7,9 +7,9 @@ import json
 import os
 from pathlib import Path
 
-from configs.config import NDSS_CONFIG, RESULTS_DIR
+from configs.config import SESSION_CONFIG, RESULTS_DIR
 from src.llm_experiments import LLMClient
-from src.ndss_prompts import build_supervised_label, build_system_prompt, build_user_prompt
+from src.session_prompts import build_supervised_label, build_system_prompt, build_user_prompt
 from src.session_splits import materialize_session_splits
 
 
@@ -29,7 +29,7 @@ def export_finetune_corpus(
     Fine-tuning uses one protocol-qualified fold so examples are not duplicated
     across folds and no validation/test capture enters supervised training.
     """
-    output_dir = Path(RESULTS_DIR) / str(NDSS_CONFIG.get("finetune_export_dir", "finetune"))
+    output_dir = Path(RESULTS_DIR) / str(SESSION_CONFIG.get("finetune_export_dir", "finetune"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     materialized = materialize_session_splits(dataset, manifest)
@@ -118,17 +118,17 @@ def create_openai_finetune_job(
         val_file = client.files.create(file=f_val, purpose="fine-tune")
 
     job = client.fine_tuning.jobs.create(
-        model=base_model or NDSS_CONFIG.get("finetune_base_model", "gpt-4.1-nano-2025-04-14"),
+        model=base_model or SESSION_CONFIG.get("finetune_base_model", "gpt-4.1-nano-2025-04-14"),
         training_file=train_file.id,
         validation_file=val_file.id,
-        suffix=suffix or NDSS_CONFIG.get("finetune_job_suffix", "session"),
+        suffix=suffix or SESSION_CONFIG.get("finetune_job_suffix", "session"),
         seed=42,
     )
     return {
         "training_file_id": train_file.id,
         "validation_file_id": val_file.id,
         "job_id": job.id,
-        "base_model": base_model or NDSS_CONFIG.get("finetune_base_model", "gpt-4.1-nano-2025-04-14"),
+        "base_model": base_model or SESSION_CONFIG.get("finetune_base_model", "gpt-4.1-nano-2025-04-14"),
     }
 
 

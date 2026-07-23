@@ -1,518 +1,306 @@
-# LLM-Powered Malicious Traffic Detection via Side-Channel Features
+# Payload-Free Malware Traffic Detection
 
-**Version 5.0.0** — April 2026
+This repository evaluates local supervised classifiers and prompted language
+models on encrypted or payload-free network metadata. The primary protocol is
+session based and capture disjoint: every test fold holds out one complete
+malware capture and its associated family while training and validation use
+different captures.
 
-## Research Overview
+The public repository contains experiment code, tests, figures, and compact
+result summaries. Packet captures, SQLite databases, split manifests, API
+checkpoints, and prediction-level outputs are intentionally excluded.
 
-This project investigates whether a general-purpose LLM can reason over minimal
-TCP side-channel features to classify network traffic as malicious or benign —
-without deep-packet inspection, payload access, or prior training on the target
-attack type.
+## What Is Evaluated
 
-Three open gaps are addressed:
+Phase 7 is the current session experiment suite. It crosses three feature sets,
+three observation units, two evaluation modes, and several detector families.
 
-**Gap 1 — LLM as a classifier:** Can an LLM match or exceed CART/KNN when given
-only the 5 side-channel features (packet size, payload size, payload ratio,
-ratio-to-previous, time difference)?
+| Dimension | Configurations |
+|---|---|
+| Feature set | `minimal`, `mercury`, `combined` |
+| Observation unit | whole `session_sequence`, fixed `behavior_window`, single-packet `packet_ablation` |
+| Evaluation mode | `balanced`, `deployment` |
+| Local detector | RF, XGBoost, LightGBM, CART, KNN |
+| Prompted detector | OpenAI GPT-5.4 or Anthropic Claude Sonnet 4.6, blind or training-memory context |
+| Supervised LLM | fine-tuning export, job creation, and held-out evaluation path |
+| Primary split | `capture_disjoint_5fold` |
+| Secondary split | `within_capture_temporal` seen-capture upper bound |
 
-**Gap 2 — Zero-shot novel attack detection:** Can an LLM generalise to a
-malware family it has never seen, using only these 5 features, without
-retraining?
+`packet_ablation` is retained only to compare against the original packet-level
+design. Whole sessions and behavior windows are the primary deployment units.
 
-**Gap 3 — Adversarial robustness:** Is an LLM-based classifier more robust to
-adversarial traffic shaping than classical ML (CART/KNN)? Decision trees make
-independent, axis-aligned splits — an attacker who knows the thresholds can
-game one feature at a time. An LLM reasons about the *joint distribution* of
-features as a narrative, detecting inconsistencies that isolated threshold
-checks miss.
+### Feature Sets
 
----
-## Experiment Output Summaries
+`minimal` contains the original five side-channel fields: packet size, payload
+size, payload ratio, size ratio to the preceding packet, and inter-arrival time.
 
-This section summarizes the latest output logs.
+`mercury` contains 20 efficiently derived Mercury-style metadata fields:
+direction, direction change, TCP/UDP indicators, encrypted-session hint, source,
+destination, and inferred service ports, well-known/ephemeral port indicators,
+TLS/DNS/web service hints, normalized packet position, elapsed session time,
+log inter-arrival time, packet-size delta, and payload-size delta.
 
-**Phase 2 local tree-ensemble baselines** (RF, XGB, LGBM)
-across session holdout, capture holdout, and leave-one-family-out (LOFO).
-
-- **Session holdout is consistently strong**:
-  - E1 full mixed: RF 0.9894, XGB 0.9857, LGBM 0.9880 accuracy
-  - E2 limited 20k: all ~0.986–0.988 accuracy
-  - E3 encrypted-only: all ~0.993–0.994 accuracy
-- **Capture holdout is more variable**:
-  - E1 full mixed remains high (~0.97–0.98)
-  - E2 limited 20k drops sharply (~0.70–0.72), with very high malicious recall
-    but many false positives
-  - E3 encrypted-only is strongest for RF (0.9954), while XGB/LGBM show lower
-    malicious recall
-- **LOFO generalisation**:
-  - Session-holdout LOFO is mostly good, with hardest families including Dridex
-    and Website_5.8.88.175
-  - Capture-holdout LOFO is substantially harder (~0.65–0.75 accuracy range)
-
-**Full pipeline for Phases 3–6**: classical ML, LLM
-experiments, comparative analysis, and adversarial robustness.
-
-- **Phase 3 classical ML**:
-  - Best models are CART/KNN, repeatedly near ~0.98–0.99 accuracy in E1/E2
-    holdouts, with strong encrypted session performance as well
-  - LR/LDA/NB are weaker; SVC is unstable in the larger settings
-- **Phase 4 LLM experiments**:
-  - 4A zero-shot: Acc 0.508, F1 0.201
-  - 4B few-shot improves with k (best at k=10: Acc 0.680, F1 0.593)
-  - 4C CoT: Acc 0.570, F1 0.538
-  - 4E session windows: best at window=5 (Acc 0.960, F1 0.962), then degrades
-    as window size increases
-  - API usage for phase 4 run: 3,200 calls, ~2.61M tokens, ~$7.83
-- **Phase 5 adversarial robustness**:
-  - Classical models (especially KNN) remain relatively resistant in evaluation
-    (single-digit to low-double-digit evasion in many settings)
-  - LLM zero-shot is highly vulnerable (roughly ~67–77% evasion across tested ε)
-  - LLM few-shot improves robustness vs zero-shot; CoT sits in between
-  - Transfer and black-box attacks can achieve high LLM evasion rates
-  - At session level, LLM detection remains high (98–99%) while CART drops at
-    higher perturbation budgets
-
----
-
-## Version 5.0 Highlights
-
-The main changes are:
-
-- **Grouped holdout for classical ML and adversarial training.** Phase 3 no longer
-  splits individual packets at random. Train/test separation is now performed by
-  **session** or by **capture** (`dataset_id`) using repeated grouped holdout and
-  selecting a class-balanced disjoint split.
-- **Malware-family labelling for local pcaps.** Local `mnt/attack_pcap/*.pcap`
-  datasets now inherit family labels from `configs/config.py` mappings or filename
-  inference, which enables Leave-One-Family-Out evaluation on the packaged corpus
-  when at least two named families are present.
-- **Correct adversarial accounting.** `prediction == -1` is now treated as
-  **invalid**, excluded from evasion-rate numerators and denominators, and reported
-  explicitly as invalid-count metadata.
-- **Improved flow/session boundaries.** Phase 1 now rotates flows on inactivity
-  timeout, fresh TCP SYN reuse, and post-FIN/RST closure grace periods. This
-  prevents unrelated connections that reuse the same 5-tuple from being merged into
-  one synthetic session.
-- **Experiment 4E fixed-cohort evaluation.** Session-window analysis now samples a
-  single balanced cohort once, reuses that same cohort across all window sizes, and
-  records real `latency_ms` for every LLM call together with a cohort hash.
-- **OpenAI is now the default provider.** All top-level examples use OpenAI first.
-  Anthropic remains optional and supported.
-
----
-
-## Session-Based Experiments
-
-Phase 7 is the reviewer-response experiment suite. It intentionally separates
-three questions that should not be mixed:
-
-- Which feature set is being tested?
-- Is the test cohort class-balanced or prevalence-faithful?
-- Is the LLM blind, memory-enabled, or fine-tuned?
-
-### What Every Phase 7 Run Tests
-
-Phase 7 uses frozen grouped split manifests under
-`results/split_manifests/session_protocol_v1/`. If a matching manifest already exists, it is
-reused rather than regenerated. The default Session grouping is by capture
-(`dataset_id`), so train, validation, and test data do not share the same
-capture.
-
-Every Session run can evaluate three feature configurations:
-
-- `minimal`: the original five side-channel features from the first version.
-- `mercury`: Mercury-style metadata available from this project's current SQLite
-  schema, such as direction, protocol, ports, service hints, encryption hint,
-  timing, and packet deltas.
-- `combined`: the original five features plus the Mercury-style metadata fields.
-
-The current database does not persist full Cisco Mercury fingerprint strings for
-TLS, SSH, HTTP, TCP options, or raw protocol feature strings. The `mercury`
-configuration is therefore a Mercury-style metadata baseline over fields actually
-extracted by this project.
-
-Every feature configuration is evaluated over the Session sample units:
-
-- `session_sequence`: a session-level row/prompt that gives the model packet
-  behavior across a session, not just one isolated packet.
-- `behavior_window`: a time-window row/prompt for behavior that may only become
-  visible over a window, such as beaconing-like periodicity. Window sizes come
-  from `NDSS_CONFIG["behavior_window_seconds"]`.
-- `packet_ablation`: an individual-packet ablation retained only to show how much
-  performance changes when the model is forced back to the original weaker
-  packet-level framing.
+These are **Mercury-style fields**, not Cisco Mercury fingerprints. The local
+schema does not include raw TLS extensions, SSH fingerprints, HTTP fingerprints,
+or TCP-option fingerprints. `combined` is the union of the 5 minimal and 20
+Mercury-style fields.
 
 ### Evaluation Modes
 
-Phase 7 has two independent controls. `--session-eval-mode` controls prevalence:
+`balanced` creates an equal benign/malicious held-out cohort in each frozen fold
+and evaluates the fixed decision threshold. It is intended for controlled,
+apples-to-apples scientific comparisons.
 
-- `balanced`: class-balanced cohorts for apples-to-apples scientific comparison.
-- `deployment`: prevalence-faithful cohorts for deployment-oriented claims. In this
-  mode, thresholds are chosen on validation data only and then applied once on the
-  imbalanced test split.
+`deployment` retains the class prevalence in the eligible held-out capture
+cohort. A threshold is selected **only on the validation partition** by
+maximizing recall subject to the configured validation false-positive-rate
+ceiling, then applied once to the test partition. This is prevalence faithful to
+the study corpus, not to an enterprise network; the corpus itself is much more
+malware dense than operational traffic.
 
-`--session-split-mode` controls the leakage boundary:
+## Current Audited Results
 
-- `capture_disjoint_5fold` is the primary protocol. Each of the five malware
-  captures is the dedicated test capture in one fold; benign captures are also
-  assigned to test so every benign capture is covered. Train, validation, and test
-  capture IDs are pairwise disjoint.
-- `within_capture_temporal` is a secondary seen-capture upper bound. Within every
-  capture, the earliest 60% of sessions train the model, the next 20% calibrate it,
-  and the latest 20% are tested. It does **not** support unseen-capture or unseen-
-  family claims.
+The table below reports whole-session results from the expanded, memory-enabled
+GPT-5.4 runs and the corresponding full-fold Random Forest runs. Pooled F1 is
+computed from confusion counts combined across the five held-out captures.
 
-The split mode and evaluation mode are orthogonal. For example,
-`capture_disjoint_5fold + balanced` tests controlled unseen-capture generalization,
-whereas `capture_disjoint_5fold + deployment` tests unseen-capture generalization
-at natural held-out-capture prevalence.
+| Evaluation | Detector / features | Accuracy | Precision | Recall | Pooled malicious F1 | Median fold F1 |
+|---|---|---:|---:|---:|---:|---:|
+| Balanced | GPT-5.4 / combined | 85.58% | 91.86% | 78.08% | 84.41% | 83.52% |
+| Balanced | RF / combined | 88.57% | 91.80% | 84.72% | 88.12% | 96.24% |
+| Deployment | GPT-5.4 / minimal | 90.36% | 89.51% | 91.16% | 90.33% | 90.97% |
+| Deployment | RF / minimal | 83.75% | 92.06% | 75.86% | 83.18% | 98.63% |
 
-Use `balanced` when answering: "Does an LLM or local model perform better when
-malicious and benign classes are deliberately controlled?" This is the cleanest
-scientific comparison because each method sees the same balanced train,
-validation, and test splits.
+These aggregates conceal material capture/family heterogeneity. The RF won four
+of five deployment family folds, while GPT-5.4 gained strongly on the held-out
+Website capture. The expanded deployment LLM run also produced a pooled test FPR
+of 10.41% even though thresholds targeted a 5% ceiling on validation data. This
+validation-to-test shift is a central deployment finding, not evidence that the
+constraint was enforced on test labels.
 
-Use `deployment` when answering: "What happens at the corpus-natural held-out-capture prevalence?"
-This mode is the one to cite for deployment claims, false-positive burden,
-absolute accuracy, and threshold-sensitive behavior. For local models and LLMs,
-the decision threshold is selected only on validation data and then evaluated
-once on the held-out imbalanced test split.
+Local batch inference ranges from roughly 13,000 to 969,000 samples/s across
+recorded configurations. GPT-5.4 required about 1.72-1.86 seconds per API call in
+the expanded whole-session runs. These timings are not hardware-normalized, but
+the order-of-magnitude operational difference is unambiguous.
 
-Here, "prevalence-faithful" means faithful to the sampled corpus and held-out
-captures, not to an assumed enterprise-network base rate. The current corpus can
-contain far more malicious sessions than a production network. Report each fold's
-observed support/prevalence and do not extrapolate precision to a different base
-rate without a separate prevalence-adjustment analysis.
+Claude Sonnet 4.6 is supported and was used in complementary packet-era
+experiments. However, the pre-replacement GitHub snapshot (`93208e275b62`)
+contains only
+`llm_results_openai_verbose.json`; it has no provider-specific Claude artifact.
+Its 5-, 10-, and 50-packet window scores therefore cannot be relabeled as Claude
+results in this release. Sonnet results should be cited only after exporting a
+provider-identified artifact from a reproducible run.
 
-### Flag Reference
+Important scope limits:
 
-| Flag | Values | Meaning |
-| --- | --- | --- |
-| `--session-mode` | `local`, `llm`, `finetune`, `all` | Chooses which experiment family runs. `local` runs RF/XGB/LGBM/CART/KNN. `llm` runs prompted LLM inference. `finetune` exports fine-tune corpora and can evaluate a supplied fine-tuned model. `all` runs local models, prompted LLMs, and fine-tune corpus export in one command. |
-| `--session-eval-mode` | `balanced`, `deployment` | Chooses controlled class balance or natural held-out-capture prevalence. Deployment thresholds are selected on validation only under the configured FPR ceiling. |
-| `--session-split-mode` | `capture_disjoint_5fold`, `within_capture_temporal` | Chooses unseen-capture generalization or the explicitly weaker seen-capture temporal upper bound. Never aggregate these protocols. |
-| `--session-llm-context` | `blind`, `memory`, `both` | Applies only to `--session-mode llm` or `all`. `blind` gives the LLM only task instructions plus the held-out sample. `memory` prepends training-split class/family summaries and labeled examples as context. `both` runs both variants in the same result file. |
-| `--provider` | `openai`, `anthropic` | Chooses the prompted LLM provider. OpenAI is the default in the examples. |
-| `--session-budget-profile` | `full`, `paper_5k`, `paper_6k` | Chooses the prompted LLM scope. `paper_5k` and `paper_6k` use the five frozen family folds (`0` through `4`). |
-| `--dry-run` | flag | Prints representative LLM prompts and coverage warnings without making API calls. Use it with `--session-mode llm`; it does not write result or report files. |
-| `--allow-large-llm-run` | flag | Required for Phase 7 prompted LLM sweeps whose estimated API-call count exceeds `NDSS_CONFIG["llm_large_run_call_threshold"]`. This prevents accidentally launching tens of thousands of calls. |
+- The current capture-disjoint corpus has seven benign and five malicious
+  captures, with one malicious capture for each evaluated family.
+- Sessions and behavior windows require at least six packets so Hancitor remains
+  eligible.
+- Local models evaluate complete held-out folds; prompted LLM results use frozen,
+  family-aware budgeted subsets because API inference is costly.
+- The expanded published prompted runs are memory-enabled GPT-5.4 runs. Blind
+  prompting, Claude Sonnet 4.6, and a fine-tuning path exist in code, but no
+  completed Sonnet session or fine-tuned model artifact is claimed in the six
+  published summaries.
+- Local and LLM inputs share base metadata and split manifests, but their tabular
+  and textual representations are not byte-for-byte identical.
 
-### Output Files
+See [`results/published/README.md`](results/published/README.md) and the six
+summary JSON files in `results/published/` for fold-level metrics, provenance,
+and source-artifact hashes.
 
-Phase 7 writes protocol-qualified files. Old `ndss_*.json` artifacts are not
-loaded by this implementation and must not be combined with redesigned results:
+## Installation
 
-- `results/session_local_results_<split>_<evaluation>.json`: local fold rows,
-  robust summaries, unsupported cells, and paired differences.
-- `results/session_llm_results_<split>_<evaluation>_<profile>_<provider>_<context>.json`: prompted or
-  fine-tuned sample rows, fold summaries, family detection, and paired context
-  differences.
-- `results/session_report_<split>_<evaluation>_<profile>_<provider>_<context>.md`: fold support,
-  prevalence, median/IQR/min/max, runtime, family, and paired-comparison tables.
-- `results/finetune/session_protocol_v1/*.jsonl` and `*.json`: fine-tuning train,
-  validation, test, and metadata exports.
-- `results/split_manifests/session_protocol_v1/*.json`: immutable protocol
-  manifests. Feature sets share a manifest whenever cohort semantics are identical.
-
-Runs that execute local models or LLM inference write a fresh result file for
-the selected `--session-mode`, `--session-eval-mode`, and split mode. If you want blind and
-memory-enabled LLMs compared in the same JSON/report, use the context mode
-`both`. If you run `blind` and `memory` as separate commands, the later command
-writes only the selected context rows for that evaluation mode.
-
-### Recommended Reviewer Run Sequence
-
-### Budgeted Prompted-LLM Design
-
-Use `--session-budget-profile paper_5k` for the reviewer-ready balanced prompted
-LLM run when API budget matters. This profile is intentionally not the full
-factorial sweep. It evaluates:
-
-- Feature sets: `minimal`, `mercury`, and `combined`.
-- Sample units: `session_sequence`, complete sessions represented as ordered
-  `behavior_window` sequences at `5.0` seconds, and `packet_ablation` as a
-  blind-only ablation. Session and behavior-window eligibility both use a
-  six-packet minimum so Hancitor is represented with meaningful support.
-- Contexts: `blind` and `memory` for session/window samples; `blind` only for
-  packet ablation.
-- Folds: frozen fold indices `0,1,2,3,4`; each is tied to one dedicated held-out
-  malware capture/family by the manifest.
-- Balanced mode: `26` held-out test samples per fold.
-- Deployment mode under `paper_5k`: `15` validation samples plus `27` held-out
-  test samples per fold.
-- Deployment mode under `paper_6k`: `25` validation samples plus `55` held-out
-  test samples per fold.
-
-Expected API-call counts:
-
-- Balanced budgeted run: `15 variants x 5 folds x 26 = 1,950` calls.
-- Deployment budgeted run: `15 variants x 5 folds x (15 + 27) = 3,150` calls.
-- Both together: `5,100` calls.
-- Higher-depth deployment run: `15 variants x 5 folds x (25 + 55) = 6,000`
-  calls with `--session-budget-profile paper_6k`.
-
-API price and retry behavior can change, so the code enforces call-count preflight
-rather than promising a currency cost. Budgeted outputs remain separate:
-
-- `results/session_llm_results_capture_disjoint_5fold_balanced_paper_5k_openai_both.json`
-- `results/session_llm_results_capture_disjoint_5fold_deployment_paper_5k_openai_both.json`
-- `results/session_llm_results_capture_disjoint_5fold_deployment_paper_6k_openai_both.json`
-- matching `.partial.json` checkpoint files during execution
-- `results/session_report_capture_disjoint_5fold_balanced_paper_5k_openai_both.md`
-- `results/session_report_capture_disjoint_5fold_deployment_paper_5k_openai_both.md`
-- `results/session_report_capture_disjoint_5fold_deployment_paper_6k_openai_both.md`
-
-Balanced `paper_5k` is the mode to cite for malware-family detection-rate
-coverage because it uses family-stratified malicious sampling and records
-per-family summary rows. Deployment `paper_6k` is the preferred mode to cite for
-prevalence/threshold behavior after the balanced run because it scores more
-validation and test samples per fold. Every family has one dedicated test fold;
-still check `LLM Family Coverage Audit`, support, and
-`missing_malicious_families` before making an all-family claim about a narrowed
-or interrupted run.
-
-#### 1. Preview LLM Prompts Without API Calls
-
-Use this before spending money on prompted LLM experiments:
+Python 3.11 or newer is recommended. XGBoost and LightGBM are required for the
+complete local suite; Phase 2 and Phase 7 fail clearly if requested algorithms
+are unavailable.
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode llm --session-llm-context memory --dry-run
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-What it tests: prompt construction, feature rendering, session/window formatting,
-and memory-context formatting.
+API credentials must be supplied through environment variables, never committed
+to `configs/config.py`:
 
-What it outputs: representative prompts and coverage warnings in the console.
-It does not make API calls and, for `--ndss-mode llm`, does not write result or
-report files.
+```powershell
+$env:OPENAI_API_KEY = "your-openai-key"
+$env:ANTHROPIC_API_KEY = "your-anthropic-key"
+```
 
-#### 2. Run Local Baselines With Balanced Scientific Comparison
+The provider and model defaults are configured in `configs/config.py` under
+`LLM_CONFIG`. The checked-in defaults are OpenAI `gpt-5.4` and Anthropic
+`claude-sonnet-4-6`. Anthropic documents that dateless 4.6 ID as a
+[pinned model](https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions),
+not an evergreen alias. Select the provider with `--provider openai` or
+`--provider anthropic`.
+
+## Data Preparation
+
+The dataset is not distributed through Git. Download the configured public CTU
+captures and build the local database as follows:
+
+```powershell
+python run_all.py --phase 0
+python run_all.py --phase 1 --rebuild-db
+```
+
+If `data/traffic.db` was already built from the same raw captures with the current
+extractor and contains packet, session, capture, label, and family metadata, it
+can be reused. Phase 7 derives session representations and frozen split manifests
+from that database; it does not require a second extraction merely because the
+session experiments are enabled.
+
+Before spending API budget, validate the command and prompt construction:
+
+```powershell
+python run_all.py --phase 7 --session-mode llm --provider openai --dry-run
+python run_all.py --phase 7 --session-mode llm --provider anthropic --dry-run
+```
+
+## Reproducing Phase 7
+
+### Local Baselines
+
+Balanced scientific comparison:
 
 ```powershell
 python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode local
 ```
 
-What it tests: RF, XGBoost, LightGBM, CART, and KNN over `minimal`, `mercury`,
-and `combined` features, across session, behavior-window, and packet-ablation
-sample units, using class-balanced grouped train/validation/test splits.
-
-Why run it: this is the apples-to-apples local baseline for scientific
-comparison. It answers whether richer metadata improves classical baselines and
-which local model is strongest when class prevalence is controlled.
-
-What it outputs: `results/session_local_results_capture_disjoint_5fold_balanced.json`
-and a protocol-qualified Session report.
-
-API key: not required. These models run locally.
-
-#### 3. Run Local Baselines With Deployment Prevalence
+Deployment-prevalence evaluation with validation-only threshold selection:
 
 ```powershell
 python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode local
 ```
 
-What it tests: the same local models, feature sets, and sample units as step 2,
-but on prevalence-faithful grouped splits. Thresholds are selected on validation
-data only and then applied once to the imbalanced test split.
+The two local commands are read-only with respect to `data/traffic.db`, but they
+write manifests and result files. Run them sequentially when first creating
+manifests. Once manifests exist, parallel execution is normally safe because
+manifest writes are locked and results use mode-specific filenames.
 
-Why run it: this is the local-model evidence for deployment claims. It exposes
-false-positive burden, threshold sensitivity, absolute detection accuracy, and
-runtime throughput under a more realistic class distribution.
+### Budgeted LLM Pilots
 
-What it outputs: `results/session_local_results_capture_disjoint_5fold_deployment.json`
-and a protocol-qualified Session report.
-
-API key: not required.
-
-#### 4. Run Blind and Memory-Enabled LLMs With Balanced Scientific Comparison
+Balanced pilot, 780 calls for three feature sets, two session units, five folds,
+and memory context:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode llm --provider openai --session-llm-context both --session-budget-profile paper_5k
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode llm --provider openai --session-llm-context memory --session-budget-profile paper_5k --session-feature-set minimal,mercury,combined --session-sample-unit session_sequence,behavior_window
 ```
 
-What it tests: prompted LLM classification over the same feature sets and sample
-units as the local baselines, using balanced held-out evaluation samples. `blind`
-is the original zero-shot/few-instruction style. `memory` adds training-split
-class/family summaries and labeled examples as structured context before the
-held-out sample. Memory mode is intentionally skipped for `packet_ablation`
-because packet-level prompts are retained only as an ablation.
-
-Why run it: this compares blind and memory-enabled LLM behavior under controlled
-balanced conditions, matching the scientific comparison used for local models.
-
-What it outputs: `results/session_llm_results_capture_disjoint_5fold_balanced_paper_5k_openai_both.json`
-and its matching Session report.
-
-API key: required for the selected provider.
-
-Cost / runtime warning: with `paper_5k`, this balanced command is about `1,950`
-API calls and writes to the protocol-qualified `session_llm_results_*.json`. The
-the exhaustive sweep is substantially larger and requires
-`--allow-large-llm-run`.
-
-#### 5. Run Blind LLMs With Deployment Prevalence
+Deployment pilot, 2,400 calls including validation and test requests:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode llm --provider openai --session-llm-context blind --session-budget-profile paper_6k
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode llm --provider openai --session-llm-context memory --session-budget-profile paper_6k --session-feature-set minimal,mercury,combined --session-sample-unit session_sequence,behavior_window
 ```
 
-What it tests: the deployment version of the original blind prompted LLM
-baseline. The LLM scores validation samples first, the threshold is selected on
-validation scores, and that threshold is then applied to the imbalanced test
-sample.
+To run the same matrix with Claude Sonnet 4.6, change only
+`--provider openai` to `--provider anthropic`. Provider-specific result names
+prevent an OpenAI run and an Anthropic run from overwriting each other.
 
-Why run it: this isolates the strictest "LLM used blind" deployment baseline.
-It is useful when responding to the reviewer concern that blind LLM prompting is
-too weak or unrealistic.
+### Expanded Published LLM Runs
 
-What it outputs: `results/session_llm_results_capture_disjoint_5fold_deployment_paper_6k_openai_blind.json`
-and its matching report, containing blind-context
-LLM rows only.
-
-API key: required.
-
-#### 6. Run Memory-Enabled LLMs With Deployment Prevalence
+Balanced expanded run, 3,120 held-out test calls:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode llm --provider openai --session-llm-context memory --session-budget-profile paper_6k
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode llm --provider openai --session-llm-context memory --session-budget-profile paper_5k --session-feature-set minimal,mercury,combined --session-sample-unit session_sequence,behavior_window --session-llm-samples-per-repeat 104 --session-llm-max-calls 5000
 ```
 
-What it tests: the same deployment protocol as step 5, but the LLM receives
-training-split context before each held-out validation/test sample. This is the
-content/memory-enabled LLM variation requested by the reviewer.
-
-Why run it: this directly tests whether structured exposure to benign/malicious
-families and examples improves LLM deployment performance compared with blind
-prompting.
-
-What it outputs: `results/session_llm_results_capture_disjoint_5fold_deployment_paper_6k_openai_memory.json`
-and its matching report, containing memory-context
-LLM rows only.
-
-API key: required.
-
-Recommended shortcut: if you want blind and memory-enabled deployment results in
-the same JSON/report, run this single combined command instead of separate steps
-5 and 6:
+Deployment expanded run, 9,600 calls including 3,000 validation and 6,600 test
+requests:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode llm --provider openai --session-llm-context both --session-budget-profile paper_6k
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode llm --provider openai --session-llm-context memory --session-budget-profile paper_6k --session-feature-set minimal,mercury,combined --session-sample-unit session_sequence,behavior_window --session-llm-validation-samples-per-repeat 100 --session-llm-test-samples-per-repeat 220 --session-llm-max-calls 10000
 ```
 
-Deployment `both` is larger than balanced mode because each fold scores a
-validation subset for threshold selection plus a held-out test subset. With
-`paper_6k`, it is capped at about `6,000` estimated API calls. The original
-exhaustive deployment sweep is substantially larger and requires
-`--allow-large-llm-run`.
+Estimate calls before execution as:
 
-#### 7. Export the Fine-Tuning Corpus
+```text
+balanced = variants * folds * test_samples_per_fold
+deployment = variants * folds * (validation_samples_per_fold + test_samples_per_fold)
+```
+
+Here, `variants = feature_sets * sample_units * window_settings * context_modes`.
+`--session-llm-max-calls` is a hard preflight budget guard. Different profiles or
+sample overrides produce distinct hashed output names. Repeating an identical
+command resumes/reuses its checkpoint rather than intentionally creating a
+duplicate run; preserve a complete `results/` directory before forcing a fresh
+replicate.
+
+### Blind, Memory, and Fine-Tuned LLMs
+
+Use `--session-llm-context blind`, `memory`, or `both`. Memory examples are drawn
+only from the fold's training partition; validation and test labels are never
+inserted into prompts.
+
+Prepare fine-tuning corpora without starting a provider job:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode finetune
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-mode finetune --provider openai
 ```
 
-What it tests: no model inference is run by default. This exports train,
-validation, and held-out test JSONL files from a frozen grouped split using the
-configured fine-tune sample unit and feature set.
-
-Why run it: this prepares the supervised LLM baseline requested by the reviewer,
-without mixing in-context prompting with supervised local-model training.
-
-What it outputs: `results/finetune/session_protocol_v1/*_train.jsonl`,
-matching validation/test JSONL files, and a
-metadata JSON file.
-
-API key: not required unless `--start-finetune-job` is also supplied.
-
-#### 8. Start an OpenAI Fine-Tuning Job
+Starting a paid OpenAI fine-tuning job requires explicit confirmation through the
+command flag:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode finetune --start-finetune-job
+python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-mode finetune --provider openai --start-finetune-job
 ```
 
-What it tests: uploads the exported corpus and starts the OpenAI fine-tuning job.
+Evaluate an existing fine-tuned model with `--finetuned-model MODEL_ID`. A
+fine-tuned result is publishable only for the held-out fold associated with the
+exported training corpus.
 
-What it outputs: the same corpus files as step 7 plus job metadata in the
-fine-tune metadata JSON.
+## Earlier Phases
 
-API key: `OPENAI_API_KEY` is required.
+Phases 2-6 remain available for reproducing the original packet-centric and
+adversarial ablations:
 
-#### 9. Evaluate a Fine-Tuned OpenAI Model
+```text
+0  dataset acquisition
+1  packet extraction and SQLite construction
+2  RF/XGBoost/LightGBM grouped local baselines
+3  CART, KNN, and other classical baselines
+4  packet-era OpenAI or Claude prompted experiments
+5  cross-model analysis
+6  adversarial evaluation
+7  capture-disjoint session experiment suite
+```
+
+Use `python run_all.py --help` for all controls.
+
+## Results and Verification
+
+Raw outputs are written under `results/` and ignored by Git. Export compact,
+shareable summaries after new runs:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode finetune --finetuned-model ft:your-model-id
+python scripts/export_publishable_results.py
 ```
 
-What it tests: the supplied fine-tuned model on the held-out test split from the
-same frozen fold used to export the fine-tuning train/validation files. This
-avoids leakage across capture-disjoint partitions.
-
-What it outputs: a protocol-qualified `results/session_llm_results_*.json`, its
-matching Session report, and fine-tune metadata.
-
-API key: `OPENAI_API_KEY` is required.
-
-### Full-Suite Shortcuts
-
-These commands are convenient after the stepwise runs are understood, but they
-are more expensive because `--session-mode all` runs local models, prompted LLMs,
-and fine-tune corpus export together.
-
-Balanced full suite:
+Run the source and protocol tests before interpreting results:
 
 ```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode balanced --session-mode all --provider openai --session-llm-context both --session-budget-profile paper_5k
+python -m pytest -q
+python -m compileall -q configs src run_all.py scripts tests
 ```
 
-Deployment full suite:
+Repository layout:
 
-```powershell
-python run_all.py --phase 7 --session-split-mode capture_disjoint_5fold --session-eval-mode deployment --session-mode all --provider openai --session-llm-context both --session-budget-profile paper_6k
+```text
+configs/                 model, feature, budget, and protocol settings
+src/                     extraction and experiment implementations
+src/adversarial/         Phase 6 perturbation and evasion code
+tests/                   deterministic split and protocol regression tests
+scripts/                 compact result exporter
+results/published/       auditable summary JSONs only
+figures/                 publication-facing aggregate figures
 ```
 
-### Secondary Temporal Upper Bound
-
-Run the secondary protocol separately; never merge it with capture-disjoint rows:
-
-```powershell
-python run_all.py --phase 7 --session-split-mode within_capture_temporal --session-eval-mode balanced --session-mode local
-```
-
-This tests later sessions from every capture after training on earlier sessions
-from those same captures. The output is
-`results/session_local_results_within_capture_temporal_balanced.json`. Its
-supported interpretation is a seen-capture temporal upper bound. Because every
-malware family maps to one capture, it cannot establish generalization to unseen
-captures or malware families.
-
-### Eligibility
-
-Both whole-session `session_sequence` and `behavior_window` cohorts use a
-six-packet minimum. In the current corpus this retains 11,247 eligible Hancitor
-sessions instead of the six sessions that survived the former eight-packet rule.
-Eligibility is embedded in manifest identity and cohort hashing, so old
-eight-packet manifests cannot be loaded for these runs.
-
-### API Key Configuration
-
-The project reads provider keys from environment variables.
-
-For the current PowerShell session:
-
-```powershell
-$env:OPENAI_API_KEY="sk-..."
-$env:ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-To persist them for your Windows user profile:
-
-```powershell
-setx OPENAI_API_KEY "sk-..."
-setx ANTHROPIC_API_KEY "sk-ant-..."
-```
-
-Notes:
-
-- `OPENAI_API_KEY` is required for OpenAI prompted runs and for starting OpenAI fine-tuning jobs.
-- `ANTHROPIC_API_KEY` is required only when you run Phase 4 or Phase 7 with `--provider anthropic`.
-- There is no API key to configure for the local Session models; RF, XGBoost, LightGBM, CART, and KNN run locally.
+The repository does not claim that the current corpus represents production
+base rates, that five held-out malware captures establish universal family
+generalization, or that budgeted LLM subsets are equivalent to full-fold local
+evaluation. Those limitations should remain explicit in any paper derived from
+these artifacts.

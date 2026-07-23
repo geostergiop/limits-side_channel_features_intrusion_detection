@@ -1,22 +1,39 @@
 # Published Result Summaries
 
-This directory contains compact, auditable exports of the primary session
-experiments. Raw prediction-level JSON, API checkpoints, SQLite databases, split
-manifests, and packet captures are intentionally excluded from the repository.
+These six files are compact exports of the primary capture-disjoint Phase 7
+session experiments. Raw prediction rows, prompts, rationales, API checkpoints,
+SQLite databases, split manifests, and packet captures are excluded.
 
-Each JSON document records the original artifact name and SHA-256 digest. LLM
-exports preserve overall summaries, held-out fold metrics, and malware-family
-detection summaries. Local-ML exports preserve overall summaries, paired model
-comparisons, and unsupported-status records. No per-session feature vectors,
-prompts, rationales, or predictions are published.
+| File group | Scope |
+|---|---|
+| `session_local_*_balanced` | Full held-out folds, balanced test cohorts, five local classifiers |
+| `session_local_*_deployment` | Full held-out folds, corpus-prevalence test cohorts, validation-selected thresholds |
+| `session_llm_*_pilot_*` | Original budget-profile GPT-5.4 memory runs |
+| `session_llm_*_expanded_*` | Higher-depth GPT-5.4 memory runs used for the current headline comparison |
 
-Regenerate the files after running the experiments:
+Every JSON document records its source artifact name and SHA-256 digest. LLM
+exports retain summary, held-out-fold, and malware-family records. Local exports
+retain summaries, paired comparisons, and unsupported-status records. The source
+artifacts are intentionally not required to inspect the published metrics.
+
+The expanded whole-session headline results are:
+
+| Evaluation | Detector / features | Pooled malicious F1 |
+|---|---|---:|
+| Balanced | GPT-5.4 / combined | 84.41% |
+| Balanced | Random Forest / combined | 88.12% |
+| Deployment | GPT-5.4 / minimal | 90.33% |
+| Deployment | Random Forest / minimal | 83.18% |
+
+These are five-capture pooled values, not per-family guarantees. Consult the
+fold-level records before citing them; capture heterogeneity is substantial.
+
+Claude Sonnet 4.6 is supported by the code, but no provider-identified Sonnet
+session artifact was present in the result archive used for these exports. It is
+therefore not assigned metrics in this directory.
+
+Regenerate the compact exports after running experiments:
 
 ```powershell
 python scripts/export_publishable_results.py
 ```
-
-The main interpretation and integrity review are in:
-
-- `../session_consolidated_results_2026-07-18.md`
-- `../gpt54_cross_generation_audit_2026-07-19.md`

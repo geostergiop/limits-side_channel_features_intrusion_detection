@@ -10,13 +10,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.ndss_dataset import (
-    NDSSDatasetSpec,
+from src.session_dataset import (
+    SessionDatasetSpec,
     _eligible_session_pool,
     _manifest_lock,
     eligibility_for_spec,
 )
-from src.ndss_experiments import (
+from src.session_experiments import (
     _load_existing_result_rows,
     _select_threshold_from_validation,
     _summarise_local_rows,
@@ -92,9 +92,9 @@ def common_manifest_kwargs():
 class EligibilityTests(unittest.TestCase):
     def test_session_thresholds_are_six_and_packet_ablation_is_distinct(self):
         common = dict(feature_set="minimal", group_by="capture", sample_size=100)
-        behavior = NDSSDatasetSpec(sample_unit="behavior_window", **common)
-        session = NDSSDatasetSpec(sample_unit="session_sequence", **common)
-        packet = NDSSDatasetSpec(sample_unit="packet_ablation", **common)
+        behavior = SessionDatasetSpec(sample_unit="behavior_window", **common)
+        session = SessionDatasetSpec(sample_unit="session_sequence", **common)
+        packet = SessionDatasetSpec(sample_unit="packet_ablation", **common)
         self.assertEqual(eligibility_for_spec(behavior)["minimum_packets_per_session"], 6)
         self.assertEqual(eligibility_for_spec(session)["minimum_packets_per_session"], 6)
         self.assertEqual(eligibility_for_spec(packet)["minimum_packets_per_session"], 2)

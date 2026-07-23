@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Prompt builders shared across NDSS zero-shot and fine-tuned baselines."""
+"""Prompt builders shared across Session zero-shot and fine-tuned baselines."""
 
 from __future__ import annotations
 
 import json
 
-from src.ndss_dataset import FEATURE_SET_DESCRIPTIONS, get_feature_columns
+from src.session_dataset import FEATURE_SET_DESCRIPTIONS, get_feature_columns
 
 
 def build_system_prompt(feature_set: str, sample_unit: str) -> str:

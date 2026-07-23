@@ -33,10 +33,9 @@ backup_result/
 *.binetflow
 
 # Raw experiment outputs can contain millions of prediction rows. Publish only
-# Markdown reports and compact files produced by export_publishable_results.py.
+# compact files produced by export_publishable_results.py.
 results/*
 !results/.gitkeep
-!results/*.md
 !results/published/
 !results/published/**
 results.zip

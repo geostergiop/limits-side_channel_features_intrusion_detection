@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS packets (
 CREATE TABLE IF NOT EXISTS llm_results (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     experiment      TEXT NOT NULL,             -- e.g., '4A_zero_shot'
-    model           TEXT NOT NULL,             -- e.g., 'claude-sonnet-5'
+    model           TEXT NOT NULL,             -- e.g., 'claude-sonnet-4-6'
     session_id      INTEGER,
     packet_ids      TEXT,                      -- JSON array of packet IDs used
     prompt_hash     TEXT,                      -- for deduplication

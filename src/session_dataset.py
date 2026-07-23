@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from configs.config import ML_CONFIG, NDSS_CONFIG, RESULTS_DIR, SESSION_SPLIT_CONFIG
+from configs.config import ML_CONFIG, SESSION_CONFIG, RESULTS_DIR, SESSION_SPLIT_CONFIG
 from src.session_splits import (
     CAPTURE_DISJOINT_5FOLD,
     SESSION_MANIFEST_SCHEMA_VERSION,
@@ -96,7 +96,7 @@ WEB_PORTS = {80, 443, 8000, 8080, 8443, 8888}
 
 
 @dataclass(frozen=True)
-class NDSSDatasetSpec:
+class SessionDatasetSpec:
     sample_unit: str
     feature_set: str
     group_by: str
@@ -146,7 +146,7 @@ def behavior_window_feature_columns(feature_set: str) -> list[str]:
     return columns
 
 
-def ndss_manifest_dir() -> Path:
+def session_manifest_dir() -> Path:
     path = (
         Path(RESULTS_DIR)
         / str(ML_CONFIG.get("split_manifest_dir", "split_manifests"))
@@ -156,11 +156,11 @@ def ndss_manifest_dir() -> Path:
     return path
 
 
-def eligibility_for_spec(spec: NDSSDatasetSpec) -> dict:
+def eligibility_for_spec(spec: SessionDatasetSpec) -> dict:
     if spec.sample_unit == "behavior_window":
-        minimum = int(NDSS_CONFIG["behavior_window_min_packets"])
+        minimum = int(SESSION_CONFIG["behavior_window_min_packets"])
     elif spec.sample_unit == "session_sequence":
-        minimum = int(NDSS_CONFIG["session_min_packets"])
+        minimum = int(SESSION_CONFIG["session_min_packets"])
     elif spec.sample_unit == "packet_ablation":
         minimum = 2
     else:
@@ -172,7 +172,7 @@ def eligibility_for_spec(spec: NDSSDatasetSpec) -> dict:
     }
 
 
-def _manifest_path(spec: NDSSDatasetSpec) -> Path:
+def _manifest_path(spec: SessionDatasetSpec) -> Path:
     eligibility = eligibility_for_spec(spec)
     payload = {
         "session_manifest_schema": SESSION_MANIFEST_SCHEMA_VERSION,
@@ -192,7 +192,7 @@ def _manifest_path(spec: NDSSDatasetSpec) -> Path:
     stem = f"{spec.sample_unit}_{spec.split_mode}_{spec.evaluation_mode}"
     if spec.window_seconds is not None:
         stem += f"_{str(spec.window_seconds).replace('.', 'p')}s"
-    return ndss_manifest_dir() / f"{stem}__{suffix}.json"
+    return session_manifest_dir() / f"{stem}__{suffix}.json"
 
 
 @contextmanager
@@ -342,7 +342,7 @@ def sample_session_ids(
             )
         return sorted(chosen)
 
-    raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+    raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
 
 
 def load_packets_for_session_ids(conn, session_ids: list[int]) -> pd.DataFrame:
@@ -368,7 +368,7 @@ def load_packets_for_session_ids(conn, session_ids: list[int]) -> pd.DataFrame:
     if not session_ids:
         return pd.DataFrame(columns=columns)
 
-    table_name = "_selected_ndss_sessions"
+    table_name = "_selected_session_sessions"
     conn.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.execute(
         f"CREATE TEMP TABLE {table_name} (session_id INTEGER PRIMARY KEY, ord INTEGER NOT NULL)"
@@ -485,8 +485,8 @@ def serialize_segment_sequence(
     window_seconds: float | None = None,
 ) -> str:
     feature_cols = get_feature_columns(feature_set)
-    segment_size = int(NDSS_CONFIG.get("sequence_segment_size", 16))
-    max_segments = int(NDSS_CONFIG.get("max_sequence_segments", 32))
+    segment_size = int(SESSION_CONFIG.get("sequence_segment_size", 16))
+    max_segments = int(SESSION_CONFIG.get("max_sequence_segments", 32))
     work = sample_df.sort_values("packet_idx").reset_index(drop=True)
     if window_seconds is not None:
         work = work[work["time_since_session_start"] <= float(window_seconds)].reset_index(drop=True)
@@ -576,7 +576,7 @@ def serialize_behavior_window_sequence(
 ) -> str:
     feature_cols = get_feature_columns(feature_set)
     windows = _window_groups(sample_df, window_seconds)
-    max_windows = int(NDSS_CONFIG.get("max_sequence_segments", 32))
+    max_windows = int(SESSION_CONFIG.get("max_sequence_segments", 32))
     reported: list[dict] = []
     if len(windows) <= max_windows:
         for idx, window in enumerate(windows):
@@ -759,11 +759,11 @@ def build_packet_ablation_samples(
         if work["is_malicious"].nunique() < 2:
             raise RuntimeError(
                 "Natural-prevalence packet-ablation sampling produced a single-class cohort. "
-                "Increase NDSS_CONFIG['packet_ablation_sample_size'] to keep deployment-mode "
+                "Increase SESSION_CONFIG['packet_ablation_sample_size'] to keep deployment-mode "
                 "evaluation informative."
             )
     else:
-        raise ValueError(f"Unknown NDSS evaluation_mode={evaluation_mode!r}")
+        raise ValueError(f"Unknown Session evaluation_mode={evaluation_mode!r}")
 
     session_starts = {
         int(session_id): _session_start_time(group)
@@ -790,7 +790,7 @@ def build_packet_ablation_samples(
     return pd.DataFrame(rows)
 
 
-def build_ndss_dataset(conn, spec: NDSSDatasetSpec) -> tuple[pd.DataFrame, list[str]]:
+def build_session_dataset(conn, spec: SessionDatasetSpec) -> tuple[pd.DataFrame, list[str]]:
     eligibility = eligibility_for_spec(spec)
     min_packets = int(eligibility["minimum_packets_per_session"])
     session_ids = sample_session_ids(
@@ -820,7 +820,7 @@ def build_ndss_dataset(conn, spec: NDSSDatasetSpec) -> tuple[pd.DataFrame, list[
             packet_df,
             spec.feature_set,
             window_seconds=float(spec.window_seconds),
-            min_packets=int(NDSS_CONFIG.get("behavior_window_min_packets", 6)),
+            min_packets=int(SESSION_CONFIG.get("behavior_window_min_packets", 6)),
         )
         return dataset, behavior_window_feature_columns(spec.feature_set)
     if spec.sample_unit == "packet_ablation":
@@ -837,7 +837,7 @@ def build_ndss_dataset(conn, spec: NDSSDatasetSpec) -> tuple[pd.DataFrame, list[
 def _session_ids_for_packet_ids(conn, packet_ids: list[int]) -> list[int]:
     if not packet_ids:
         return []
-    table_name = "_selected_ndss_packet_ids"
+    table_name = "_selected_session_packet_ids"
     conn.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.execute(f"CREATE TEMP TABLE {table_name} (packet_id INTEGER PRIMARY KEY)")
     try:
@@ -858,9 +858,9 @@ def _session_ids_for_packet_ids(conn, packet_ids: list[int]) -> list[int]:
     return [int(row[0]) for row in rows]
 
 
-def build_ndss_dataset_from_manifest(
+def build_session_dataset_from_manifest(
     conn,
-    spec: NDSSDatasetSpec,
+    spec: SessionDatasetSpec,
     manifest: dict,
 ) -> tuple[pd.DataFrame, list[str]]:
     cohort_ids = [int(packet_id) for packet_id in manifest.get("cohort_sample_ids", [])]
@@ -889,7 +889,7 @@ def build_ndss_dataset_from_manifest(
             packet_df,
             spec.feature_set,
             window_seconds=float(spec.window_seconds),
-            min_packets=int(NDSS_CONFIG.get("behavior_window_min_packets", 6)),
+            min_packets=int(SESSION_CONFIG.get("behavior_window_min_packets", 6)),
         )
         feature_cols = behavior_window_feature_columns(spec.feature_set)
     else:
@@ -910,7 +910,7 @@ def build_ndss_dataset_from_manifest(
     return dataset, feature_cols
 
 
-def _validate_manifest_request(manifest: dict, spec: NDSSDatasetSpec) -> None:
+def _validate_manifest_request(manifest: dict, spec: SessionDatasetSpec) -> None:
     expected_filters = {
         "sample_unit": spec.sample_unit,
         "evaluation_mode": spec.evaluation_mode,
@@ -925,9 +925,9 @@ def _validate_manifest_request(manifest: dict, spec: NDSSDatasetSpec) -> None:
         )
 
 
-def _build_manifest_for_spec(dataset: pd.DataFrame, spec: NDSSDatasetSpec) -> dict:
+def _build_manifest_for_spec(dataset: pd.DataFrame, spec: SessionDatasetSpec) -> dict:
     eligibility = eligibility_for_spec(spec)
-    expected_families = list(NDSS_CONFIG["expected_malware_families"])
+    expected_families = list(SESSION_CONFIG["expected_malware_families"])
     common = {
         "experiment_key": f"Session_{spec.sample_unit}",
         "evaluation_mode": spec.evaluation_mode,
@@ -971,7 +971,7 @@ def _build_manifest_for_spec(dataset: pd.DataFrame, spec: NDSSDatasetSpec) -> di
     raise ValueError(f"Unknown session split mode={spec.split_mode!r}")
 
 
-def load_or_create_ndss_manifest(conn, spec: NDSSDatasetSpec) -> tuple[pd.DataFrame, list[str], dict, Path]:
+def load_or_create_session_manifest(conn, spec: SessionDatasetSpec) -> tuple[pd.DataFrame, list[str], dict, Path]:
     manifest_path = _manifest_path(spec)
     eligibility = eligibility_for_spec(spec)
     with _manifest_lock(manifest_path):
@@ -982,10 +982,10 @@ def load_or_create_ndss_manifest(conn, spec: NDSSDatasetSpec) -> tuple[pd.DataFr
                 expected_eligibility=eligibility,
             )
             _validate_manifest_request(manifest, spec)
-            dataset, feature_cols = build_ndss_dataset_from_manifest(conn, spec, manifest)
+            dataset, feature_cols = build_session_dataset_from_manifest(conn, spec, manifest)
             return dataset, feature_cols, manifest, manifest_path
 
-        dataset, feature_cols = build_ndss_dataset(conn, spec)
+        dataset, feature_cols = build_session_dataset(conn, spec)
         if dataset.empty:
             raise RuntimeError(
                 f"Unable to build session dataset for sample_unit={spec.sample_unit}, "
