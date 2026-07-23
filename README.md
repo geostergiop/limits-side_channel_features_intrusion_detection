@@ -108,15 +108,24 @@ labels.
 | Deployment | Whole session | Combined | 1,100 | 79.27% | 96.19% | 60.41% | 74.21% | 1.768 |
 | Deployment | 5 s window | Combined | 1,100 | 52.18% | 55.15% | 16.76% | 25.71% | 1.722 |
 
-Whole-session context is consistently preferable to the 5 s representation.
-The balanced combined-feature loss is 13.80 percentage points of F1; the
-deployment losses are 12.68 points for minimal, 45.54 points for Mercury-style,
-and 48.50 points for combined metadata. The deployment failure is primarily a
-recall collapse: Mercury-style and combined 5 s recall falls to 14.92% and
-16.76%, respectively. Moreover, the best whole-session deployment run has a
-10.41% pooled test FPR despite selecting thresholds under a 5% validation FPR
-constraint. The discrepancy demonstrates capture shift between validation and
-test; it does not imply that test labels influenced threshold selection.
+The completed four-horizon sweep shows a consistent context-performance
+gradient for GPT-5.4. From whole session to 1 s, balanced F1 decreases by 5.40
+points with minimal features, 16.12 points with Mercury-style features, and
+17.81 points with combined features. The corresponding deployment losses are
+40.73, 46.20, and 48.51 points. The location of the loss differs by feature set:
+Mercury-style and combined deployment F1 have already fallen by 31.30 and 34.21
+points at 30 s, whereas minimal features retain 79.50% at 30 s and 77.66% at 5 s
+before dropping to 49.60% at 1 s.
+
+The stored whole-session and 5 s confusion matrices expose the error mechanism
+at those horizons. Mercury-style and combined deployment recall falls to 14.92%
+and 16.76% at 5 s, respectively, so their low F1 is driven primarily by missed
+malicious test instances rather than by a precision-only tradeoff. The best
+whole-session deployment run still has a 10.41% pooled test FPR despite selecting
+thresholds under a 5% validation FPR constraint. This validation-to-test gap
+demonstrates capture-dependent calibration shift; test labels were not used for
+threshold selection. The author-supplied 30 s/1 s records contain F1 only, so
+their error composition cannot be decomposed further from the published data.
 
 The Phase 4E archive used a different and weaker protocol: 200 balanced
 sessions were sampled without a capture-disjoint train/validation/test boundary,
@@ -130,12 +139,13 @@ as a historical sensitivity check.
 | 20 packets | 50.50% | 50.25% | 100.00% | 66.89% | 99 false positives |
 | 50 packets | 50.00% | 50.00% | 100.00% | 66.67% | all samples predicted malicious |
 
-These Phase 4E results do not establish that less context is harmful: the
-five-packet prompt was the best Phase 4E setting, while longer prompts collapsed
-toward an all-malicious decision. They cannot be merged with the redesigned
-time-window results because the units, cohorts, provider metadata, and leakage
-controls differ. The recovered source is named
-`llm_results_openai_verbose.json` and contains no model field; it therefore
+Phase 4E exhibits the opposite ordering from the capture-disjoint time-window
+sweep: the five-packet prompt performs best, while longer packet prefixes
+collapse toward an all-malicious decision. This reversal is consistent with a
+protocol- or prompt-specific failure, not evidence that longer observation is
+intrinsically harmful. The results cannot be merged because their units,
+cohorts, provider metadata, and leakage controls differ. The recovered source,
+`llm_results_openai_verbose.json`, contains no model field; it therefore
 cannot support a Claude Sonnet attribution. Claude Sonnet 4.6 remains executable
 through the current provider path, but no provider-identified Sonnet session
 artifact is claimed here.
@@ -177,13 +187,15 @@ below expose every individual cell.
 Deployment packet ablation fails closed because fold 0 has only 60 malicious
 validation samples, below the configured minimum support of 100. Reporting no
 score is preferable to thresholding on an underpowered validation set. Across
-the supported session/window cells, RF, XGBoost, and LightGBM are nearly
-invariant to granularity: balanced F1 remains around 88% and deployment F1 around
-80-84%. This stability is not universal. Balanced KNN falls to 75.08% with
-minimal 5 s windows, while CART falls to approximately 76% for combined 30 s and
-1 s windows. Thus, the evidence supports robustness for the ensembles and most
-local configurations, not a blanket claim that every supervised learner is
-immune to context reduction.
+the four session/window horizons, RF and XGBoost are nearly invariant to
+granularity: within any feature/evaluation series, their F1 ranges are at most
+0.57 points. Balanced LightGBM spans at most 0.08 points; its largest deployment
+span is 2.17 points for Mercury-style features. This is qualitatively different
+from GPT-5.4's 5.40-48.51 point whole-to-1 s losses. Stability is not universal
+among local learners: balanced KNN falls to 75.08% with minimal 5 s windows,
+while CART falls to approximately 76% for combined 30 s and 1 s windows. These
+are isolated model/context interactions rather than the systematic decline
+observed across every GPT feature set and both evaluation modes.
 
 Across the 120 supported local session/window summary cells, throughput derived
 from recorded test size and prediction time spans approximately 2.5 thousand to
@@ -203,50 +215,69 @@ project author. Their raw predictions, confusion counts, class supports, and
 latencies are not present in this repository, so those cells cannot be
 independently recomputed and are not used in the detailed LLM table above.
 
+The descriptive best-feature envelope changes sharply with context. In balanced
+evaluation, the best GPT/local F1 values are 84.41/89.08% for whole sessions,
+75.10/88.45% at 30 s, 70.61/88.46% at 5 s, and 66.60/88.74% at 1 s. In
+deployment evaluation they are 90.33/83.18%, 79.50/83.01%, 77.66/83.58%, and
+49.60/85.06%, respectively. GPT therefore leads the best local baseline only in
+the whole-session deployment comparison, by 7.15 points; by 1 s, the best local
+result leads GPT by 22.14 points in balanced evaluation and 35.46 points in
+deployment evaluation. These post hoc envelopes summarize the observed result
+matrix and are not a feature-selection procedure.
+
 #### Minimal Features
 
 ![Minimal-feature F1 by detector and context](figures/session_granularity_minimal.png)
 
 [Vector PDF](figures/session_granularity_minimal.pdf). Minimal metadata is the
-least sensitive balanced GPT configuration, declining from 61.00% for the whole
-session to 60.40%, 59.95%, and 55.60% at 30 s, 5 s, and 1 s. Deployment declines
-more sharply from 90.33% to 79.50%, 77.66%, and 49.60%. The local ensembles
-remain stable; the main counterexample is balanced KNN at 5 s.
+least context-sensitive balanced GPT configuration: F1 remains within 1.05
+points of the whole-session result through 5 s, then loses a further 4.35 points
+at 1 s. Deployment behavior is nonlinear. F1 declines from 90.33% to 79.50% at
+30 s and 77.66% at 5 s, followed by a 28.06-point 5-to-1 s collapse. RF,
+XGBoost, and LightGBM do not reproduce that collapse; balanced KNN at 5 s is the
+principal local exception.
 
 #### Mercury-Style Features
 
 ![Mercury-style F1 by detector and context](figures/session_granularity_mercury.png)
 
 [Vector PDF](figures/session_granularity_mercury.pdf). Mercury-style context
-raises whole-session GPT F1 over minimal features in balanced evaluation, then
-falls from 76.72% to 68.90%, 63.11%, and 60.60% as the horizon contracts. Its
-deployment representation is substantially more brittle: F1 falls from 69.40%
-to 38.10%, 23.86%, and 23.20%. Local models remain tightly clustered, with no
-analogous systematic collapse.
+improves balanced whole-session GPT F1 by 15.72 points over minimal metadata,
+but that advantage contracts to 5.00 points at 1 s. Deployment performance is
+substantially more brittle: F1 loses 31.30 points by 30 s, 45.54 points by 5 s,
+and 46.20 points by 1 s. The near-plateau between 5 s and 1 s (23.86% versus
+23.20%) indicates that most of the failure has already occurred by the 5 s
+horizon. Local Mercury-style results remain near 80-89% across all horizons.
 
 #### Combined Features
 
 ![Combined-feature F1 by detector and context](figures/session_granularity_combined.png)
 
 [Vector PDF](figures/session_granularity_combined.pdf). Combining both feature
-families produces the strongest balanced whole-session GPT result (84.41%) but
-does not protect against truncation: balanced F1 decreases to 75.10%, 70.61%,
-and 66.60%. Deployment F1 falls from 74.21% to 40.00%, 25.71%, and 25.70%,
-whereas RF/XGBoost/LightGBM remain near their whole-session scores. CART's
-isolated 30 s and 1 s balanced failures show why model-specific cells must remain
-visible rather than reporting only the best local detector.
+families produces the strongest balanced GPT result at every horizon, but its
+advantage over the other GPT feature sets does not make it context invariant:
+F1 loses 9.31 points by 30 s and 17.81 points by 1 s. Under deployment
+prevalence, combined features lose 34.21 points by 30 s and produce nearly the
+same low F1 at 5 s and 1 s (25.71% and 25.70%). RF/XGBoost/LightGBM remain close to
+their whole-session scores. CART's isolated balanced failures at 30 s and 1 s
+show why model-specific cells must remain visible instead of reporting only the
+best local detector.
 
-The most plausible mechanism is representation and calibration loss. A whole
-session preserves long-range direction changes, packet-size transitions,
-periodicity, and repeated service behavior. A 5 s slice can omit those events and
-may resemble a benign connection prefix. GPT receives only a small budgeted set
-of labeled memory examples and is not optimized on every training window; the
-local models are fitted directly to all eligible supervised window profiles.
-Short windows also shift score distributions across captures, weakening a
-validation-selected threshold. These are evidence-consistent explanations, not
-causal conclusions. The supplemental 30 s/1 s points strengthen the observed
-degradation pattern, but their prediction-level artifacts are still needed to
-separate information loss from prompt representation and threshold transfer.
+The completed sweep establishes that GPT-5.4 is context sensitive under this
+prompted representation: all six feature/evaluation trajectories attain their
+highest F1 on whole sessions and their lowest F1 at 1 s (the combined deployment
+5 s and 1 s values are tied to one decimal place). The detector-by-horizon
+interaction is not an inevitable consequence of shorter windows because the
+tree ensembles remain nearly flat on the same split manifests. The pattern is
+consistent with loss of long-range direction changes, packet-size transitions,
+periodicity, and repeated service behavior, compounded by threshold transfer
+across captures. It may also reflect the training asymmetry: local models are
+fitted directly to all eligible window profiles, whereas GPT receives a
+budgeted memory prompt rather than window-specific supervised optimization.
+These mechanisms are not separately identified by the experiment, but the
+practical result within this matrix is clear: reducing temporal scope
+systematically harms the prompted detector and can erase its whole-session
+deployment advantage.
 
 Important scope limits remain. The corpus contains seven benign and five
 malicious captures, with one malicious capture per evaluated family. Sessions

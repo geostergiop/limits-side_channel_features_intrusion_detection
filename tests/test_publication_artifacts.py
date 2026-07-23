@@ -57,6 +57,31 @@ class PublicationArtifactTests(unittest.TestCase):
             0.257062146892655,
         )
 
+    def test_completed_gpt_sweeps_have_reported_context_ordering(self):
+        values = collect_values()
+        granularities = ("Whole", "30 s", "5 s", "1 s")
+        expected_losses = {
+            ("balanced", "minimal"): 0.054,
+            ("balanced", "mercury"): 0.16118403547671845,
+            ("balanced", "combined"): 0.178074844074844,
+            ("deployment", "minimal"): 0.40728467153284675,
+            ("deployment", "mercury"): 0.462021101992966,
+            ("deployment", "combined"): 0.485081447963801,
+        }
+        for (mode, feature), expected_loss in expected_losses.items():
+            series = [
+                values[(mode, feature, "GPT-5.4", granularity)]
+                for granularity in granularities
+            ]
+            self.assertEqual(max(series), series[0])
+            self.assertEqual(min(series), series[-1])
+            self.assertAlmostEqual(series[0] - series[-1], expected_loss)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("completed four-horizon sweep", readme)
+        self.assertNotIn("dedicated multi-window LLM sweep", readme)
+        self.assertNotIn("points strengthen the observed degradation", readme)
+
     def test_reported_local_winners_match_published_summaries(self):
         values = collect_values()
         expected = {
