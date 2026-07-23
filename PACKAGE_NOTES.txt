@@ -1,0 +1,22 @@
+Portable package notes
+======================
+
+This package was repacked to avoid UI transport failures caused by the large raw
+SQLite database in the original zip artifact.
+
+What changed in packaging:
+- data/traffic.db is stored as data/traffic.db.xz
+- results/ is intentionally left empty except for .gitkeep placeholders
+- __pycache__ and other transient files were removed
+
+How to restore the bundled database:
+    python restore_db.py
+
+If you prefer to reuse your existing traffic.db from the original project bundle,
+copy it into data/ and optionally run:
+    python repair_db_labels.py data/traffic.db
+
+Important:
+To make the new sessionization / flow-boundary logic affect packet and session
+features, rebuild the database from the pcaps:
+    python run_all.py --phase 1 --rebuild-db

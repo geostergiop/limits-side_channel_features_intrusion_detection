@@ -1,0 +1,57 @@
+# Python and test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+pytest-cache-files-*/
+tmp*/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Editor and OS artifacts
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Raw and processed traffic data. These files must never be published.
+data/
+mnt/
+backup_result/
+*.db
+*.db.*
+*.pcap
+*.pcapng
+*.binetflow
+
+# Raw experiment outputs can contain millions of prediction rows. Publish only
+# Markdown reports and compact files produced by export_publishable_results.py.
+results/*
+!results/.gitkeep
+!results/*.md
+!results/published/
+!results/published/**
+results.zip
+results-console-output.txt
+results-phase2-output.txt
+
+# Generated paper/build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+
+# Local Codex metadata
+.agents/
